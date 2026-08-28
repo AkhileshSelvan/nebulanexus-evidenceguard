@@ -113,7 +113,7 @@ def run_pipeline(
         extraction = extract(doc, data)
         forensics = analyze(doc, image_paths=[], file_data=data)
         metadata = extract_metadata(doc, file_path=None, file_data=data)
-        doc_risk = score_document(doc["id"], forensics, metadata)
+        doc_risk = score_document(doc["id"], forensics, metadata, extraction)
 
         extractions.append(extraction)
         entries.append(
