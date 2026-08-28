@@ -35,9 +35,16 @@ function leadSentence(summary: string): string {
 export function ReportView({
   report,
   onReset,
+  onBackToHistory,
 }: {
   report: VerificationReport;
   onReset: () => void;
+  /**
+   * Present only when this report was opened from Case History, so the reader
+   * gets the way back they actually came by. Purely navigational -- it does not
+   * touch the report's contents.
+   */
+  onBackToHistory?: () => void;
 }) {
   // Bumped after a decision is recorded so <AuditHistory> refetches the real
   // trail from the backend -- there is no client-side audit log anymore.
@@ -51,6 +58,17 @@ export function ReportView({
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 pb-20">
       {/* ── Header ───────────────────────────────────────────────────── */}
+      {onBackToHistory && (
+        <button
+          type="button"
+          onClick={onBackToHistory}
+          className="eg-press inline-flex min-h-[44px] flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:border-guard-400 hover:text-guard-700 eg-reveal"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+          Back to case history
+        </button>
+      )}
+
       <header className="eg-reveal flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

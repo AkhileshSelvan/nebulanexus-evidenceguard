@@ -45,9 +45,11 @@ function ReviewerStatusBadge({ decision }: { decision: ReviewDecision | null }) 
 interface CaseHistoryProps {
   /** Open the full, unmodified ReportView for this case (fetched via getCase). */
   onOpenCase: (reportId: string) => void;
+  /** Return to the screen this was opened from (upload, or a report). */
+  onBack: () => void;
 }
 
-export function CaseHistory({ onOpenCase }: CaseHistoryProps) {
+export function CaseHistory({ onOpenCase, onBack }: CaseHistoryProps) {
   const [cases, setCases] = useState<CaseSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -76,6 +78,14 @@ export function CaseHistory({ onOpenCase }: CaseHistoryProps) {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 pb-20">
       <header className="eg-reveal">
+        <button
+          type="button"
+          onClick={onBack}
+          className="eg-press inline-flex min-h-[44px] flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:border-guard-400 hover:text-guard-700 mb-3"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+          Back
+        </button>
         <h1 className="text-lg font-bold tracking-tight text-slate-900">Case history</h1>
         <p className="mt-1 text-xs text-slate-500">
           {cases !== null && `${cases.length} case${cases.length === 1 ? "" : "s"} on record`}
