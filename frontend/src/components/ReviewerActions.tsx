@@ -64,8 +64,8 @@ export function ReviewerActions({ reportId, onDecisionRecorded }: ReviewerAction
 
   if (recorded) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-        <h2 className="text-lg font-bold text-slate-800 mb-3">Reviewer decision</h2>
+      <div className="eg-card p-5">
+        <h2 className="text-base font-bold text-slate-900 mb-3">Reviewer decision</h2>
         <div className={`p-3 rounded-lg border text-sm ${
           recorded.decision === "accept" ? "bg-emerald-50 border-emerald-200 text-emerald-800" :
           recorded.decision === "reject" ? "bg-rose-50 border-rose-200 text-rose-800" :
@@ -86,8 +86,8 @@ export function ReviewerActions({ reportId, onDecisionRecorded }: ReviewerAction
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-      <h2 className="text-lg font-bold text-slate-800 mb-4">Reviewer decision</h2>
+    <div className="eg-card p-5">
+      <h2 className="text-base font-bold text-slate-900 mb-4">Reviewer decision</h2>
 
       <div className="mb-4">
         <label htmlFor="reviewer-name" className="block text-sm font-medium text-slate-700 mb-2">
@@ -120,25 +120,25 @@ export function ReviewerActions({ reportId, onDecisionRecorded }: ReviewerAction
       </div>
 
       {error && (
-        <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2 mb-4">{error}</p>
+        <p className="eg-scale-in mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{error}</p>
       )}
 
       {pendingConfirm === "reject" ? (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 mb-4">
+        <div className="eg-scale-in mb-4 rounded-lg border border-rose-200 bg-rose-50 p-4">
           <h3 className="text-sm font-semibold text-rose-800 mb-1">Confirm rejection</h3>
           <p className="text-sm text-rose-600 mb-4">{DECISION_META.reject.confirm}</p>
           <div className="flex gap-3">
             <button
               onClick={() => handleClick("reject")}
               disabled={submitting}
-              className="px-4 py-2 bg-rose-600 text-white text-sm font-medium rounded-md hover:bg-rose-700 shadow-sm disabled:opacity-50"
+              className="eg-press min-h-[44px] rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? "Recording…" : "Yes, reject bundle"}
             </button>
             <button
               onClick={() => setPendingConfirm(null)}
               disabled={submitting}
-              className="px-4 py-2 bg-white text-slate-700 border border-slate-300 text-sm font-medium rounded-md hover:bg-slate-50"
+              className="eg-press min-h-[44px] rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
@@ -149,7 +149,7 @@ export function ReviewerActions({ reportId, onDecisionRecorded }: ReviewerAction
           <button
             onClick={() => handleClick("accept")}
             disabled={submitting}
-            className="flex-1 flex justify-center items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 shadow-sm transition-colors disabled:opacity-50"
+            className="eg-press flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Recording…" : "Accept"}
           </button>
@@ -157,7 +157,7 @@ export function ReviewerActions({ reportId, onDecisionRecorded }: ReviewerAction
           <button
             onClick={() => handleClick("review")}
             disabled={submitting}
-            className="flex-1 flex justify-center items-center gap-2 px-4 py-2.5 bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 shadow-sm transition-colors disabled:opacity-50"
+            className="eg-press flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Recording…" : "Request evidence"}
           </button>
@@ -165,7 +165,7 @@ export function ReviewerActions({ reportId, onDecisionRecorded }: ReviewerAction
           <button
             onClick={() => handleClick("reject")}
             disabled={submitting}
-            className="flex-1 flex justify-center items-center gap-2 px-4 py-2.5 bg-white border border-rose-200 text-rose-600 font-medium rounded-lg hover:bg-rose-50 shadow-sm transition-colors disabled:opacity-50"
+            className="eg-press flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-rose-300 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 shadow-sm hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Reject
           </button>

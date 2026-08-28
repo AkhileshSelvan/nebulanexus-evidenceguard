@@ -1,135 +1,197 @@
-import { useState } from "react";
-import { ReportDocumentEntry } from "../types";
+import type { ForensicSignal, MetadataSignal, ReportDocumentEntry } from "../types";
+import { Disclosure } from "./Disclosure";
 
-export function EvidenceCard({ entry }: { entry: ReportDocumentEntry }) {
-  const [activeTab, setActiveTab] = useState<"extraction" | "forensics" | "metadata">("extraction");
-  const doc = entry.document;
+/**
+ * Per-document evidence, grouped by source with the important findings first.
+ *
+ * This replaced a tabbed layout. Tabs rendered only one section at a time, so
+ * forensic and metadata findings were absent from the DOM until clicked —
+ * invisible to find-in-page and to assistive tech, and two interactions deep
+ * once the card itself sits inside a disclosure. Grouped sections keep every
+ * finding present and collapse only the raw/technical parts.
+ *
+ * Nothing is filtered out: flagged, informational and passed findings are all
+ * rendered, only ordered by how much they matter.
+ */
+
+type AnySignal = ForensicSignal | MetadataSignal;
+
+/** A finding the analyzer recorded but deliberately did not score. */
+function isInformational(s: AnySignal): boolean {
+  return (s.detail ?? "").includes("[informational:");
+}
+
+function SignalRow({ signal }: { signal: AnySignal }) {
+  const informational = isInformational(signal);
+  const flagged = !signal.passed;
+
+  const chip = flagged
+    ? "bg-rose-100 text-rose-800"
+    : informational
+      ? "bg-slate-100 text-slate-600"
+      : "bg-emerald-100 text-emerald-800";
+  const chipLabel = flagged ? "Flagged" : informational ? "Informational" : "Pass";
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-slate-800 truncate" title={doc.filename}>
-            {doc.filename}
-          </h3>
-          <p className="text-xs text-slate-500 mt-1 capitalize">
-            {doc.detected_type?.replace(/_/g, " ") || "Unknown Type"} • {(doc.byte_size / 1024).toFixed(1)} KB
-          </p>
-        </div>
-        <div className={`shrink-0 px-2.5 py-1 rounded text-xs font-bold uppercase ${
-          entry.risk.severity === "low" ? "bg-emerald-100 text-emerald-700" :
-          entry.risk.severity === "medium" ? "bg-amber-100 text-amber-700" :
-          "bg-rose-100 text-rose-700"
-        }`}>
-          Risk: {Math.round(entry.risk.score)}
-        </div>
+    <li className="signal-row rounded-lg px-2.5 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-sm font-medium text-slate-800">{signal.label}</span>
+        <span className="flex flex-shrink-0 items-center gap-1.5">
+          {flagged && (
+            <span className="tabular text-xs font-semibold text-slate-500">
+              {signal.score.toFixed(0)}
+            </span>
+          )}
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${chip}`}>
+            {chipLabel}
+          </span>
+        </span>
       </div>
+      {signal.detail && (
+        <p className="mt-1 text-xs leading-relaxed text-slate-600">{signal.detail}</p>
+      )}
+      {"regions" in signal && signal.regions.length > 0 && (
+        <p className="mt-1 text-[11px] text-slate-500">
+          {signal.regions.length} annotated region{signal.regions.length === 1 ? "" : "s"}
+        </p>
+      )}
+    </li>
+  );
+}
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 bg-white px-2">
-        {(["extraction", "forensics", "metadata"] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-3 text-sm font-medium capitalize border-b-2 transition-colors ${
-              activeTab === tab 
-                ? "border-guard-500 text-guard-600" 
-                : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+/** Flagged first, then informational, then clean — each group by score desc. */
+function rank(signals: AnySignal[]): AnySignal[] {
+  const tier = (s: AnySignal) => (!s.passed ? 0 : isInformational(s) ? 1 : 2);
+  return [...signals].sort((a, b) => tier(a) - tier(b) || b.score - a.score);
+}
+
+function SourceSection({
+  title,
+  summary,
+  signals,
+}: {
+  title: string;
+  summary: string;
+  signals: AnySignal[];
+}) {
+  const ordered = rank(signals);
+  const flagged = ordered.filter((s) => !s.passed);
+  const others = ordered.filter((s) => s.passed);
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h4>
+        {flagged.length > 0 && (
+          <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">
+            {flagged.length} flagged
+          </span>
+        )}
       </div>
+      {summary && <p className="mb-2 text-xs text-slate-500">{summary}</p>}
 
-      {/* Content Area */}
-      <div className="p-0 overflow-y-auto max-h-80 bg-slate-50/30 flex-1">
-        {activeTab === "extraction" && (
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-2 font-semibold text-slate-600">Field</th>
-                <th className="px-4 py-2 font-semibold text-slate-600">Value</th>
-                <th className="px-4 py-2 font-semibold text-slate-600 w-16">Conf</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {entry.extraction.fields.map((f, i) => (
-                <tr key={i} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-2 text-slate-500 font-medium whitespace-nowrap">{f.key.replace(/_/g, " ")}</td>
-                  <td className="px-4 py-2 text-slate-800 font-mono text-xs">{f.value}</td>
-                  <td className="px-4 py-2 text-slate-500">
-                    <span className={`px-1.5 py-0.5 rounded text-xs ${
-                      f.confidence > 0.9 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                    }`}>
-                      {Math.round(f.confidence * 100)}%
-                    </span>
-                  </td>
-                </tr>
+      {flagged.length > 0 && (
+        <ul className="space-y-1">
+          {flagged.map((s, i) => (
+            <SignalRow key={`${s.id}-${i}`} signal={s} />
+          ))}
+        </ul>
+      )}
+
+      {others.length > 0 && (
+        <div className={flagged.length > 0 ? "mt-2" : ""}>
+          <Disclosure summary="Checks that did not flag" count={others.length} tone="quiet">
+            <ul className="space-y-1">
+              {others.map((s, i) => (
+                <SignalRow key={`${s.id}-${i}`} signal={s} />
               ))}
-              {entry.extraction.fields.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-slate-500 italic">No fields extracted.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+            </ul>
+          </Disclosure>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function EvidenceCard({ entry }: { entry: ReportDocumentEntry }) {
+  const { document: doc, extraction, forensics, metadata } = entry;
+  const rawEntries = Object.entries(metadata.raw ?? {});
+
+  return (
+    <div className="space-y-4">
+      {/* Document facts — no internal id in the primary view. */}
+      <p className="text-xs text-slate-500">
+        {doc.detected_type?.replace(/_/g, " ") ?? "Unknown type"}
+        <span aria-hidden="true"> · </span>
+        {(doc.byte_size / 1024).toFixed(0)} KB
+        <span aria-hidden="true"> · </span>
+        {doc.page_count} page{doc.page_count === 1 ? "" : "s"}
+      </p>
+
+      <SourceSection title="Image forensics" summary={forensics.summary} signals={forensics.signals} />
+      <SourceSection title="File metadata" summary={metadata.summary} signals={metadata.signals} />
+
+      {/* Extracted text — technical, collapsed by default. */}
+      <div>
+        <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Document text
+        </h4>
+        <p className="mb-2 text-xs text-slate-500">
+          {extraction.engine}
+          <span aria-hidden="true"> · </span>
+          confidence {(extraction.text_confidence * 100).toFixed(0)}%
+          <span aria-hidden="true"> · </span>
+          {extraction.fields.length} field{extraction.fields.length === 1 ? "" : "s"} extracted
+        </p>
+
+        {extraction.fields.length > 0 ? (
+          <Disclosure summary="Extracted fields" count={extraction.fields.length} tone="quiet">
+            <dl className="space-y-1.5">
+              {extraction.fields.map((f, i) => (
+                <div key={i} className="flex items-baseline gap-2 text-xs">
+                  <dt className="w-28 flex-shrink-0 text-slate-500">{f.key.replace(/_/g, " ")}</dt>
+                  <dd className="min-w-0 flex-1 break-words font-medium text-slate-800">{f.value}</dd>
+                  <dd className="tabular flex-shrink-0 text-slate-500">
+                    {Math.round(f.confidence * 100)}%
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Disclosure>
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-2.5 py-2 text-xs italic text-slate-500">
+            No fields extracted.
+          </p>
         )}
 
-        {activeTab === "forensics" && (
-          <div className="p-4 space-y-4">
-            <p className="text-sm text-slate-600 mb-2">{entry.forensics.summary}</p>
-            {entry.forensics.signals.map((sig, i) => (
-              <div key={i} className={`p-3 border rounded-lg ${sig.passed ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'}`}>
-                <div className="flex justify-between items-start mb-1">
-                  <h4 className="font-medium text-slate-800 text-sm">{sig.label}</h4>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${sig.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                    {sig.passed ? 'Pass' : 'Flag'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 mt-1">{sig.detail}</p>
-                {sig.regions.length > 0 && (
-                  <div className="mt-2 text-xs text-slate-500">
-                    {sig.regions.length} annotated region(s)
-                  </div>
-                )}
+        {extraction.warnings && extraction.warnings.length > 0 && (
+          <div className="mt-2">
+            <Disclosure summary="Extraction warnings" count={extraction.warnings.length} tone="quiet">
+              <ul className="space-y-1">
+                {extraction.warnings.map((w, i) => (
+                  <li key={i} className="text-xs leading-relaxed text-slate-600">
+                    {w}
+                  </li>
+                ))}
+              </ul>
+            </Disclosure>
+          </div>
+        )}
+      </div>
+
+      {/* Raw file properties — deepest technical level. */}
+      {rawEntries.length > 0 && (
+        <Disclosure summary="Raw file properties" count={rawEntries.length} tone="quiet">
+          <dl className="space-y-1">
+            {rawEntries.map(([k, v]) => (
+              <div key={k} className="flex gap-2 text-[11px]">
+                <dt className="w-32 flex-shrink-0 font-mono text-slate-500">{k}</dt>
+                <dd className="min-w-0 break-all font-mono text-slate-700">{String(v)}</dd>
               </div>
             ))}
-          </div>
-        )}
-
-        {activeTab === "metadata" && (
-          <div className="p-4 space-y-4">
-            <p className="text-sm text-slate-600 mb-2">{entry.metadata.summary}</p>
-            
-            <div className="space-y-3">
-              {entry.metadata.signals.map((sig, i) => (
-                <div key={i} className={`p-3 border rounded-lg ${sig.passed ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'}`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <h4 className="font-medium text-slate-800 text-sm">{sig.label}</h4>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${sig.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {sig.passed ? 'Pass' : 'Flag'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1">{sig.detail}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6">
-              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Raw File Properties</h4>
-              <div className="bg-slate-800 rounded-lg p-3 overflow-x-auto">
-                <pre className="text-[10px] sm:text-xs text-slate-300 font-mono leading-relaxed">
-                  {Object.entries(entry.metadata.raw).map(([k, v]) => (
-                    <div key={k}><span className="text-slate-500">{k}:</span> <span className="text-emerald-300">{String(v)}</span></div>
-                  ))}
-                </pre>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+          </dl>
+        </Disclosure>
+      )}
     </div>
   );
 }

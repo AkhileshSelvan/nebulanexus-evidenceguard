@@ -2,10 +2,29 @@ import { Explanation } from "../types";
 
 export function ExplanationPanel({ explanation }: { explanation: Explanation }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-5 border-b border-slate-100 bg-slate-50">
-        <h2 className="text-lg font-bold text-slate-800">Explanation</h2>
-        <p className="text-sm text-slate-700 mt-2 leading-relaxed">{explanation.summary}</p>
+    <div className="eg-card overflow-hidden">
+      {/* The summary is rendered verbatim from the backend. It carries the
+          product's core disclaimer ("a prompt for human review, not a
+          determination of fraud") — never paraphrase or truncate it here. */}
+      <div className="border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white p-5">
+        <div className="flex items-center gap-2">
+          <svg
+            className="h-5 w-5 text-guard-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.8}
+              d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
+            />
+          </svg>
+          <h2 className="text-base font-bold text-slate-900">Explanation</h2>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-slate-700">{explanation.summary}</p>
       </div>
 
       <div className="p-5 space-y-6">
@@ -32,7 +51,7 @@ export function ExplanationPanel({ explanation }: { explanation: Explanation }) 
                 <div>
                   <h4 className="font-semibold text-slate-800 text-sm">
                     {factor.title}
-                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500 uppercase">
+                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 uppercase">
                       {factor.weight} weight
                     </span>
                   </h4>

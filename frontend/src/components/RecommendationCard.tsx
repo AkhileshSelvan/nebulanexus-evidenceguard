@@ -38,7 +38,7 @@ export function RecommendationCard({ recommendation }: RecommendationCardProps) 
   const meta = DECISION_META[recommendation.decision];
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="eg-card overflow-hidden">
       <div className={`p-5 border-b flex items-start gap-4 ${meta.color}`}>
         <div className="shrink-0 mt-1">{meta.icon}</div>
         <div>

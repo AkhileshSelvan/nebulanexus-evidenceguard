@@ -1,90 +1,114 @@
-import { useState, useEffect } from "react";
+import { useElapsedSeconds, stagger } from "../motion";
 
-const STAGES = [
-  { id: "ingest", label: "Ingesting Documents", duration: 800 },
-  { id: "ocr", label: "Extracting Text (OCR)", duration: 1500 },
-  { id: "forensics", label: "Running Image Forensics", duration: 2000 },
-  { id: "metadata", label: "Analyzing Metadata", duration: 1000 },
-  { id: "consistency", label: "Checking Consistency", duration: 1200 },
-  { id: "risk", label: "Aggregating Risk Score", duration: 800 },
-];
+/**
+ * Shown while POST /api/v1/verify is in flight.
+ *
+ * HONESTY NOTE — this screen deliberately does NOT claim per-stage progress.
+ * `/verify` is a single blocking request that returns only once the whole
+ * pipeline has finished; it streams no stage events. An earlier version
+ * advanced these stages on hardcoded timers (800ms, 1500ms, …), which reached
+ * "complete" while the backend was still working — a 9-document bundle takes
+ * 60-90s. That was fabricated progress.
+ *
+ * So the stages below are a *map of what runs*, not a progress bar. The only
+ * moving parts are an indeterminate bar (means "working", claims no
+ * percentage) and a real elapsed clock.
+ */
 
-export function ProcessingScreen() {
-  const [currentStageIndex, setCurrentStageIndex] = useState(0);
+const PIPELINE = [
+  { id: "ingest", label: "Ingest", detail: "Hash, size and type per document" },
+  { id: "ocr", label: "OCR", detail: "Local Tesseract text + field extraction" },
+  { id: "forensics", label: "Forensics", detail: "Pixel and PDF manipulation signals" },
+  { id: "consistency", label: "Consistency", detail: "Cross-document field agreement" },
+  { id: "risk", label: "Risk fusion", detail: "Bounded evidence aggregation" },
+  { id: "report", label: "Report", detail: "Verification report assembled" },
+] as const;
 
-  useEffect(() => {
-    let timeout: ReturnType<typeof setTimeout>;
-    
-    if (currentStageIndex < STAGES.length - 1) {
-      // Move to next stage after simulated duration
-      timeout = setTimeout(() => {
-        setCurrentStageIndex(prev => prev + 1);
-      }, STAGES[currentStageIndex].duration);
-    }
-
-    return () => clearTimeout(timeout);
-  }, [currentStageIndex]);
-
-  const progressPercentage = Math.round(((currentStageIndex + 0.5) / STAGES.length) * 100);
+export function ProcessingScreen({ fileCount }: { fileCount?: number }) {
+  const elapsed = useElapsedSeconds(true);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto w-full animate-fade-in">
-      <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
-        {/* Animated outer ring */}
-        <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
-        <div className="absolute inset-0 rounded-full border-4 border-guard-500 border-t-transparent animate-spin"></div>
-        
-        {/* Pulse effect */}
-        <div className="absolute inset-0 rounded-full bg-guard-100 animate-pulse-ring"></div>
-        
-        {/* Icon */}
-        <svg className="w-10 h-10 text-guard-600 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
+    <div className="mx-auto w-full max-w-2xl py-8 sm:py-14">
+      <div className="eg-reveal text-center">
+        <div className="relative mx-auto mb-6 flex h-16 w-16 items-center justify-center">
+          <span className="absolute inset-0 rounded-full border-2 border-slate-200" />
+          <span
+            className="absolute inset-0 animate-spin rounded-full border-2 border-guard-600 border-t-transparent"
+            style={{ animationDuration: "1.1s" }}
+          />
+          <svg
+            className="relative h-7 w-7 text-guard-700"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+            />
+          </svg>
+        </div>
+
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900">
+          Analysing evidence
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-600">
+          {typeof fileCount === "number" && fileCount > 0
+            ? `Running the full pipeline over ${fileCount} document${fileCount === 1 ? "" : "s"}.`
+            : "Running the full verification pipeline."}{" "}
+          Larger bundles can take a minute or more.
+        </p>
       </div>
 
-      <h2 className="text-xl font-semibold text-slate-800 mb-2">Analyzing Evidence</h2>
-      <p className="text-guard-600 font-medium mb-8 min-h-[1.5rem] animate-fade-in" key={currentStageIndex}>
-        {STAGES[currentStageIndex].label}...
+      {/* Indeterminate bar: signals activity, promises no percentage. */}
+      <div
+        className="eg-reveal mt-8 h-1.5 w-full overflow-hidden rounded-full bg-slate-200"
+        style={stagger(1)}
+        role="progressbar"
+        aria-label="Verification in progress"
+        aria-busy="true"
+        /* No aria-valuenow — the true progress is genuinely unknown. */
+      >
+        <div className="eg-indeterminate h-full w-full rounded-full bg-guard-600" />
+      </div>
+
+      <p
+        className="eg-reveal tabular mt-3 text-center text-xs text-slate-500"
+        style={stagger(2)}
+        aria-live="polite"
+      >
+        {elapsed}s elapsed
       </p>
 
-      {/* Progress Bar */}
-      <div className="w-full bg-slate-100 rounded-full h-2.5 mb-8 overflow-hidden shadow-inner">
-        <div 
-          className="bg-guard-500 h-2.5 rounded-full transition-all duration-500 ease-out relative" 
-          style={{ width: `${progressPercentage}%` }}
-        >
-          <div className="absolute inset-0 bg-white/20 w-full animate-[progress-bar_2s_ease-in-out_infinite]"></div>
-        </div>
-      </div>
+      {/* Pipeline map — what the request runs, not a progress claim. */}
+      <ol className="mt-10 space-y-1">
+        {PIPELINE.map((stage, i) => (
+          <li
+            key={stage.id}
+            className="eg-slide-in flex items-start gap-3 rounded-lg px-3 py-2.5"
+            style={stagger(i + 3)}
+          >
+            <span className="mt-1.5 flex h-2 w-2 flex-shrink-0 items-center justify-center">
+              <span className="eg-breathe h-2 w-2 rounded-full bg-guard-500" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-slate-800">{stage.label}</span>
+              <span className="block text-xs text-slate-500">{stage.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
 
-      {/* Pipeline Stages Checklist */}
-      <div className="w-full space-y-3">
-        {STAGES.map((stage, index) => {
-          const isComplete = index < currentStageIndex;
-          const isActive = index === currentStageIndex;
-          const isPending = index > currentStageIndex;
-
-          return (
-            <div key={stage.id} className={`flex items-center transition-opacity duration-300 ${isPending ? 'opacity-40' : 'opacity-100'}`}>
-              <div className="mr-3 flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                {isComplete ? (
-                  <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                ) : isActive ? (
-                  <div className="w-2.5 h-2.5 rounded-full bg-guard-500 animate-pulse"></div>
-                ) : (
-                  <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
-                )}
-              </div>
-              <span className={`text-sm ${isComplete ? 'text-slate-600 font-medium' : isActive ? 'text-guard-700 font-semibold' : 'text-slate-500'}`}>
-                {stage.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <p
+        className="eg-reveal mx-auto mt-8 max-w-md text-center text-xs leading-relaxed text-slate-500"
+        style={stagger(10)}
+      >
+        Stages are shown for context. This view reports elapsed time only — it does not
+        estimate completion, because the analysis does not report intermediate progress.
+      </p>
     </div>
   );
 }

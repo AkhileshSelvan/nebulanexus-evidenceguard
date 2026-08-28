@@ -4,8 +4,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Design tokens
+   One rhythm for the whole product: every transition uses these durations and
+   curves, so motion reads as a single system rather than per-component taste.
+   ══════════════════════════════════════════════════════════════════════════ */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+
+  /* Entrances ease-out; exits ease-in and shorter (~65% of enter). */
+  --eg-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --eg-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --eg-dur-fast: 150ms;
+  --eg-dur-base: 220ms;
+  --eg-dur-slow: 320ms;
+  --eg-dur-exit: 140ms;
+
+  /* Stagger step for list entrances (30–50ms per Material guidance). */
+  --eg-stagger: 40ms;
 }
 
 body {
@@ -16,44 +32,161 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+/* Numeric columns must not jitter as values change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
-/* Risk gauge arc */
+/* ── Focus ────────────────────────────────────────────────────────────────
+   Focus rings are never removed. :focus-visible keeps them out of a mouse
+   user's way while remaining fully present for keyboard navigation.       */
+:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  z-index: 100;
+  transition: top var(--eg-dur-fast) var(--eg-ease-out);
+}
+.skip-link:focus {
+  top: 0.75rem;
+}
+
+/* ── Entrance ─────────────────────────────────────────────────────────────
+   `.eg-reveal` fades + lifts a section in. Set `--i` on children for a
+   staggered sequence. Transform/opacity only, so no layout thrash.        */
+@keyframes eg-reveal {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.eg-reveal {
+  animation: eg-reveal var(--eg-dur-slow) var(--eg-ease-out) both;
+  animation-delay: calc(var(--i, 0) * var(--eg-stagger));
+}
+
+@keyframes eg-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.eg-scale-in {
+  animation: eg-scale-in var(--eg-dur-base) var(--eg-ease-out) both;
+}
+
+@keyframes eg-slide-in {
+  from { opacity: 0; transform: translate3d(-8px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.eg-slide-in {
+  animation: eg-slide-in var(--eg-dur-base) var(--eg-ease-out) both;
+  animation-delay: calc(var(--i, 0) * var(--eg-stagger));
+}
+
+/* Exit is deliberately faster than the matching entrance. */
+@keyframes eg-exit {
+  to { opacity: 0; transform: translate3d(8px, 0, 0) scale(0.98); }
+}
+.eg-exit {
+  animation: eg-exit var(--eg-dur-exit) var(--eg-ease-in) both;
+}
+
+/* ── Indeterminate progress ───────────────────────────────────────────────
+   Used while POST /verify is in flight. The backend does not stream stage
+   progress, so this communicates "working" WITHOUT implying a known
+   percentage. An honest indicator rather than a fabricated one.           */
+@keyframes eg-indeterminate {
+  0%   { transform: translateX(-100%) scaleX(0.35); }
+  50%  { transform: translateX(20%)   scaleX(0.55); }
+  100% { transform: translateX(100%)  scaleX(0.35); }
+}
+.eg-indeterminate {
+  animation: eg-indeterminate 1.5s var(--eg-ease-out) infinite;
+  transform-origin: left center;
+  will-change: transform;
+}
+
+@keyframes eg-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.65; transform: scale(0.92); }
+}
+.eg-breathe {
+  animation: eg-breathe 1.6s ease-in-out infinite;
+}
+
 .risk-gauge {
-  transition: stroke-dashoffset 1s ease-in-out;
+  transition: stroke-dashoffset 900ms var(--eg-ease-out);
 }
 
-/* Glassmorphism card */
-.glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+.eg-bar {
+  transition: width 700ms var(--eg-ease-out);
 }
 
-/* Signal row hover */
+/* ── Surfaces ─────────────────────────────────────────────────────────── */
+.eg-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+}
+
 .signal-row {
-  transition: background-color 0.15s ease;
+  transition: background-color var(--eg-dur-fast) var(--eg-ease-out);
 }
 .signal-row:hover {
   background-color: #f8fafc;
 }
 
-/* Drop zone */
 .drop-zone-active {
-  border-color: #2563eb;
+  border-color: #1d4ed8;
   background-color: #eef5ff;
+}
+
+/* Press feedback — scale only, so surrounding layout never shifts. */
+.eg-press {
+  transition: transform var(--eg-dur-fast) var(--eg-ease-out),
+              background-color var(--eg-dur-fast) var(--eg-ease-out),
+              box-shadow var(--eg-dur-fast) var(--eg-ease-out),
+              border-color var(--eg-dur-fast) var(--eg-ease-out),
+              color var(--eg-dur-fast) var(--eg-ease-out);
+}
+.eg-press:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Reduced motion — one global guard.
+   Content still appears at full opacity; only movement is removed, so nothing
+   is ever hidden from a user who opts out of animation.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .eg-reveal,
+  .eg-slide-in,
+  .eg-scale-in {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .eg-indeterminate {
+    animation: none !important;
+    transform: none !important;
+    opacity: 0.6;
+  }
+  .eg-breathe { animation: none !important; }
 }
