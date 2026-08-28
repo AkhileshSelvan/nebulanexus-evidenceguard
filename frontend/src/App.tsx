@@ -5,12 +5,14 @@ import { UploadScreen } from "./components/UploadScreen";
 import { ProcessingScreen } from "./components/ProcessingScreen";
 import { ReportView } from "./components/ReportView";
 import { CaseHistory } from "./components/CaseHistory";
+import { DecisionHistory } from "./components/DecisionHistory";
 
 type AppState =
   | { screen: "upload" }
   | { screen: "processing"; fileCount: number }
   | { screen: "report"; report: VerificationReport }
   | { screen: "history" }
+  | { screen: "decision-history" }
   // Fetching an already-completed case from history -- distinct from
   // "processing", which implies the analysis pipeline is running. Reusing
   // ProcessingScreen's pipeline stages here would claim work that isn't
@@ -159,6 +161,17 @@ export default function App() {
               </svg>
               <span className="hidden sm:inline">Case history</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setAppState({ screen: "decision-history" })}
+              className="eg-press inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:border-guard-300 hover:text-guard-700"
+              aria-current={appState.screen === "decision-history" ? "page" : undefined}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              <span className="hidden sm:inline">Decision history</span>
+            </button>
             <span className="hidden text-xs font-medium text-slate-500 sm:inline">Backend</span>
             <StatusPill status={status} onRetry={() => runCheck()} />
           </div>
@@ -180,6 +193,8 @@ export default function App() {
         )}
 
         {appState.screen === "history" && <CaseHistory onOpenCase={handleOpenCase} />}
+
+        {appState.screen === "decision-history" && <DecisionHistory onBack={handleReset} />}
 
         {appState.screen === "loading-case" && (
           <div className="eg-reveal mx-auto max-w-lg py-16 text-center" aria-live="polite">
