@@ -35,7 +35,7 @@ NOISE_ZSCORE_THRESH = 2.0  # blocks with σ this far from the mean
 
 COPY_MOVE_BLOCK = 16       # block size for copy-move matching
 COPY_MOVE_HASH_BITS = 64   # bits in perceptual hash of each block
-COPY_MOVE_MIN_MATCHES = 15 # minimum matching block-pairs to fire
+COPY_MOVE_MIN_MATCHES = 5  # minimum matching block-pairs to fire
 
 DCT_HIST_BINS = 256        # bins for the DCT coefficient histogram
 DCT_PERIOD_THRESH = 0.25   # normalized peak-to-average to flag
@@ -362,13 +362,13 @@ def detect_copy_move(image: Image.Image) -> ForensicSignal:
             # Simple edge energy via Sobel-like horizontal diff
             dx = float(np.abs(np.diff(block, axis=1)).mean())
             dy = float(np.abs(np.diff(block, axis=0)).mean())
-            # Quantize with 1 decimal place to reduce false matches
-            # while still catching genuine copy-move duplicates.
+            # Integer quantization for JPEG-tolerant matching.
+            # The >20-positions limit + std>8 threshold prevent FP.
             descriptor = (
-                round(mean_val, 1),
-                round(std_val, 1),
-                round(dx, 1),
-                round(dy, 1),
+                round(mean_val, 0),
+                round(std_val, 0),
+                round(dx, 0),
+                round(dy, 0),
                 round(min_val, 0),
                 round(max_val, 0),
             )

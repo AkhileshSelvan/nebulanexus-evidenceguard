@@ -574,16 +574,12 @@ def _check_missing_expected_metadata(
     missing: list[str] = []
 
     if container == "pdf":
-        for key in ["Producer", "CreationDate", "creator", "creation", "modDate"]:
-            if not any(k.lower() == key.lower() for k in raw):
-                # Check case-insensitive
-                found = False
-                for rk in raw:
-                    if rk.lower() == key.lower():
-                        found = True
-                        break
-                if not found:
-                    missing.append(key)
+        # Use substring matching: "creation" matches "CreationDate", etc.
+        expected_substrings = ["producer", "creation", "creator", "mod"]
+        for expected in expected_substrings:
+            found = any(expected in rk.lower() for rk in raw)
+            if not found:
+                missing.append(expected)
 
     elif container == "jpeg":
         if not any("EXIF:" in k for k in raw):

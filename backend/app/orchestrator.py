@@ -90,25 +90,30 @@ def run_pipeline(
         so the report is structurally complete but analytically empty.
     """
     bundle_id = _short_id("bnd")
+    documents: list[Document] = []
+    file_data_map: dict[str, bytes] = {}
 
-    documents: list[Document] = [
-        build_document(
+    for (name, mtype, data, dtype) in uploads:
+        doc = build_document(
             bundle_id=bundle_id,
             filename=name,
             media_type=mtype,
             data=data,
             declared_type=dtype,
         )
-        for (name, mtype, data, dtype) in uploads
-    ]
+        documents.append(doc)
+        
+        # Save file data to pass to modules
+        file_data_map[doc["id"]] = data
 
     # --- per-document stages ---------------------------------------------- #
     entries: list[ReportDocumentEntry] = []
     extractions = []
     for doc in documents:
+        data = file_data_map[doc["id"]]
         extraction = extract(doc, image_paths=[])
-        forensics = analyze(doc, image_paths=[])
-        metadata = extract_metadata(doc, file_path=None)
+        forensics = analyze(doc, image_paths=[], file_data=data)
+        metadata = extract_metadata(doc, file_path=None, file_data=data)
         doc_risk = score_document(doc["id"], forensics, metadata)
 
         extractions.append(extraction)
