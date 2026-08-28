@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // The dev server proxies API calls to the backend so the frontend can use
@@ -14,5 +14,10 @@ export default defineConfig({
       "/health": { target: proxyTarget, changeOrigin: true },
       "/api": { target: proxyTarget, changeOrigin: true },
     },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    css: false,
   },
 });

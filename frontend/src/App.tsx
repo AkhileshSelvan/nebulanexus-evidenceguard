@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { checkHealth, verifyBundle, type BackendStatus } from "./api";
+import { checkHealth, verifyBundle, getCase, type BackendStatus } from "./api";
 import type { VerificationReport } from "./types";
 import { UploadScreen } from "./components/UploadScreen";
 import { ProcessingScreen } from "./components/ProcessingScreen";
 import { ReportView } from "./components/ReportView";
+import { CaseHistory } from "./components/CaseHistory";
 
 type AppState =
   | { screen: "upload" }
   | { screen: "processing"; fileCount: number }
   | { screen: "report"; report: VerificationReport }
+  | { screen: "history" }
+  // Fetching an already-completed case from history -- distinct from
+  // "processing", which implies the analysis pipeline is running. Reusing
+  // ProcessingScreen's pipeline stages here would claim work that isn't
+  // happening; this is a single GET, so it gets its own honest label.
+  | { screen: "loading-case" }
   // Honest failure state: a failed /verify call NEVER falls back to
   // fabricated evidence -- the reviewer sees the real error and can retry.
   | { screen: "error"; message: string };
@@ -92,6 +99,19 @@ export default function App() {
 
   const handleReset = () => setAppState({ screen: "upload" });
 
+  const handleOpenCase = async (reportId: string) => {
+    setAppState({ screen: "loading-case" });
+    try {
+      const detail = await getCase(reportId);
+      setAppState({ screen: "report", report: detail.report });
+    } catch (err) {
+      setAppState({
+        screen: "error",
+        message: err instanceof Error ? err.message : "Could not load that case.",
+      });
+    }
+  };
+
   return (
     <div className="min-h-dvh bg-slate-50 font-sans text-slate-900">
       <a
@@ -127,7 +147,18 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="flex flex-shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setAppState({ screen: "history" })}
+              className="eg-press inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:border-guard-300 hover:text-guard-700"
+              aria-current={appState.screen === "history" ? "page" : undefined}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="hidden sm:inline">Case history</span>
+            </button>
             <span className="hidden text-xs font-medium text-slate-500 sm:inline">Backend</span>
             <StatusPill status={status} onRetry={() => runCheck()} />
           </div>
@@ -146,6 +177,22 @@ export default function App() {
 
         {appState.screen === "report" && (
           <ReportView report={appState.report} onReset={handleReset} />
+        )}
+
+        {appState.screen === "history" && <CaseHistory onOpenCase={handleOpenCase} />}
+
+        {appState.screen === "loading-case" && (
+          <div className="eg-reveal mx-auto max-w-lg py-16 text-center" aria-live="polite">
+            <div className="relative mx-auto mb-4 flex h-12 w-12 items-center justify-center">
+              <span className="absolute inset-0 rounded-full border-2 border-slate-200" />
+              <span
+                className="absolute inset-0 animate-spin rounded-full border-2 border-guard-600 border-t-transparent"
+                style={{ animationDuration: "1.1s" }}
+                aria-hidden="true"
+              />
+            </div>
+            <p className="text-sm text-slate-600">Loading case&hellip;</p>
+          </div>
         )}
 
         {appState.screen === "error" && (
