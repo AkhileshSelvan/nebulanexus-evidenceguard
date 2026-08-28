@@ -52,6 +52,13 @@ _FUZZY_WARN = 0.75   # plausibly-the-same-thing-with-noise -> warn
 
 _ARITHMETIC_TOLERANCE = 0.02  # 2% -- absorbs rounding / OCR digit noise
 
+# document_number_reuse scoring. Kept low on purpose: a repeated registration or
+# national ID number across a person's own credentials is the expected case, not
+# a fraud indicator, and this module has no document-type context with which to
+# tell the two apart. (Was 20.0 per document, capped at 60.0.)
+DOC_NUMBER_REUSE_PER_DOC = 4.0
+DOC_NUMBER_REUSE_CAP = 12.0
+
 
 # --------------------------------------------------------------------------- #
 # small shared helpers                                                        #
@@ -271,10 +278,22 @@ def _check_document_number_reuse(
         "bundle -- confirm this is expected (e.g. the same person's ID referenced on related "
         "paperwork) rather than one document's number copied onto another."
     )
-    # Informational by default: reuse is common and often legitimate (a
-    # person's own ID number appearing on several of their own documents),
-    # so this warns rather than fails outright.
-    return builder.result("warn", min(20.0 * doc_count, 60.0), avg_conf, detail)
+    # Informational, and deliberately low-scored. Without knowing the document
+    # types we cannot separate reuse from *expected* reuse -- and expected reuse
+    # is the common case: a student registration number is designed to appear on
+    # the marksheet, the migration certificate and the transfer certificate
+    # alike, as is a national ID number across a person's own paperwork. On a
+    # real bundle of legitimate credentials this fired at 40/100 and contributed
+    # 9.3 points via the highest-weighted source (see the calibration audit).
+    # Reuse only becomes evidence once document type is known, which this module
+    # does not have -- so surface the observation and leave the judgement to the
+    # reviewer rather than pricing it as fraud.
+    return builder.result(
+        "warn",
+        min(DOC_NUMBER_REUSE_PER_DOC * doc_count, DOC_NUMBER_REUSE_CAP),
+        avg_conf,
+        detail,
+    )
 
 
 # --------------------------------------------------------------------------- #

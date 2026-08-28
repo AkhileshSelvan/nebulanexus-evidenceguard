@@ -40,6 +40,117 @@ SIGNAL_WEIGHTS: dict[str, float] = {
     "annotation_overlay": 0.10,
 }
 
+# --------------------------------------------------------------------------- #
+# Input provenance and detector validity                                       #
+# --------------------------------------------------------------------------- #
+#
+# A pixel detector is only evidence of *manipulation* if the artifact it keys on
+# could not have been produced by the delivery pipeline itself. For a raster we
+# recovered by re-rendering a PDF page, that is frequently not the case:
+#
+#   scan/photo -> lossy encode -> embed in PDF -> our re-render at 200 DPI
+#
+# so at least two lossy passes plus a resample happen before the detector ever
+# sees a pixel. Signals whose physical basis is "this region was compressed or
+# resampled differently" therefore carry no manipulation information on a
+# PDF-derived raster: they fire on the pipeline, not on an edit.
+#
+# Measured on a real 9-document bundle of legitimate scanned credentials
+# (see the calibration audit): copy_move fired on 9/9 documents and scored up to
+# 91.8 on genuine pages -- higher than the 25.9 scored by the deliberately
+# forged copy-move fixture. double_compression reached 100.0 on a genuine birth
+# certificate. A detector whose strongest hits are all on authentic documents is
+# not measuring authenticity.
+#
+# These signals are therefore DEMOTED (not deleted) for PDF-derived rasters:
+# the measurement, the confidence and any regions are preserved for a reviewer,
+# but the concern score is zeroed so the signal cannot drive a risk decision.
+# Native JPEG/PNG inputs are untouched -- there the pipeline adds nothing, so the
+# detectors keep their full evidential force.
+
+#: Signals whose artifact is inherent to PDF rasterization, at any strength.
+PDF_PIPELINE_ARTIFACT_SIGNALS: frozenset[str] = frozenset({
+    "copy_move",           # repeated seals/logos/ruled cells/glyphs on forms
+    "double_compression",  # guaranteed by scan -> encode -> embed -> re-render
+})
+
+#: Signals that stay evidential on PDF rasters but need a higher bar, because
+#: ordinary scanned paper (illumination gradient, texture, fold shadows) shows
+#: block-to-block variation on its own. Below this the reading is consistent
+#: with normal scanning and is demoted; above it, it still counts.
+PDF_SCANNED_PAPER_TOLERANCE: dict[str, float] = {
+    "noise_inconsistency": 50.0,
+}
+
+#: Deliberately NOT a global "materiality floor".
+#:
+#: A floor was prototyped here and removed. Whether a detector fired is the
+#: detector's own judgement, and overriding it from the aggregator changes the
+#: meaning of `passed` for every downstream consumer -- including the forensics
+#: module's own tests. Near-floor readings are already immaterial by weight:
+#: on the real 9-document bundle every ela_hotspot fire combined contributed
+#: 1.05 of 82.73 points (1.3%), which cannot move a decision.
+#:
+#: Open finding for the forensics owner (not fixed here): on that corpus
+#: ela_hotspot scored 0.1-3.4 on genuine pages and 4.1 on the deliberately
+#: tampered fixture. Those distributions overlap, so ELA is not currently
+#: discriminating on scanned input -- worth revisiting the detector itself
+#: rather than muting it downstream.
+MATERIALITY_FLOOR = 0.0
+
+
+def _demote(signal: ForensicSignal, reason: str) -> None:
+    """Neutralise a signal's risk contribution while preserving the evidence.
+
+    The reviewer keeps the measured value, the confidence and the regions; only
+    the *concern* score is zeroed, because on this input type the observation is
+    not evidence of manipulation. ``passed`` becomes True to say exactly that:
+    we looked, we measured, and we assess the finding as benign here.
+    """
+    measured = signal.get("score", 0.0)
+    signal["score"] = 0.0
+    signal["passed"] = True
+    signal["detail"] = (
+        f"{signal.get('detail', '').rstrip()} "
+        f"[informational: measured {measured:.1f}/100 but not scored — {reason}]"
+    ).strip()
+
+
+def apply_provenance_calibration(
+    signals: list[ForensicSignal], *, is_pdf_raster: bool
+) -> list[ForensicSignal]:
+    """Demote signals that the input's own delivery pipeline can explain.
+
+    Returns the same list, mutated in place, so callers keep signal ordering.
+    """
+    for signal in signals:
+        if signal.get("passed"):
+            continue
+        sid = signal.get("id", "")
+        score = float(signal.get("score", 0.0) or 0.0)
+
+        if not is_pdf_raster:
+            # Native JPEG/PNG: the delivery pipeline added nothing, so every
+            # detector keeps its full evidential force.
+            continue
+
+        if sid in PDF_PIPELINE_ARTIFACT_SIGNALS:
+            _demote(
+                signal,
+                "input is a PDF-embedded raster, whose scan/encode/re-render "
+                "pipeline reproduces this artifact on authentic documents",
+            )
+            continue
+
+        tolerance = PDF_SCANNED_PAPER_TOLERANCE.get(sid)
+        if tolerance is not None and score < tolerance:
+            _demote(
+                signal,
+                f"within normal scanned-paper variation for a PDF raster "
+                f"(below {tolerance:.0f}/100)",
+            )
+    return signals
+
 
 def analyze(
     document: Document,
@@ -135,6 +246,12 @@ def analyze(
             signals.append(annot_signal)
         except Exception as exc:
             logger.warning("Annotation overlay check failed: %s", exc)
+
+    # --- Provenance calibration ------------------------------------------- #
+    # Applied before roll-up so the section score reflects only findings this
+    # input type cannot explain on its own. Signals are demoted, never dropped:
+    # the reviewer still sees every measurement in `signals`.
+    apply_provenance_calibration(signals, is_pdf_raster=is_pdf)
 
     # --- Roll up ---------------------------------------------------------- #
     score = _rollup_score(signals)
