@@ -10,3 +10,8 @@ python-multipart==0.0.20   # required by FastAPI for multipart/form-data file up
 pillow==12.1.1
 pytesseract==0.3.13
 pymupdf==1.28.2
+
+# forensics
+numpy>=1.26                # forensics: ELA / noise / DCT analysis
+pikepdf>=9.0                # forensics: PDF metadata extraction
+piexif>=1.1                 # forensics: EXIF metadata (JPEG)
