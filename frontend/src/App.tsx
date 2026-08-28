@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
+import { checkHealth, submitVerification, type BackendStatus } from "./api";
+import { VerificationReport } from "./types";
+import { UploadScreen } from "./components/UploadScreen";
+import { ProcessingScreen } from "./components/ProcessingScreen";
+import { ReportView } from "./components/ReportView";
 
-import { checkHealth, type BackendStatus } from "./api";
+type AppState = "upload" | "processing" | "report";
 
 export default function App() {
   const [status, setStatus] = useState<BackendStatus>({ state: "checking" });
+  const [appState, setAppState] = useState<AppState>("upload");
+  const [report, setReport] = useState<VerificationReport | null>(null);
 
   const runCheck = useCallback((signal?: AbortSignal) => {
     setStatus({ state: "checking" });
@@ -22,86 +29,60 @@ export default function App() {
     return () => controller.abort();
   }, [runCheck]);
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-8 px-6 py-16">
-        <header className="text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-guard-900">
-            EvidenceGuard
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Verify the evidence, not just the document.
-          </p>
-        </header>
+  const handleVerify = async (files: File[]) => {
+    setAppState("processing");
+    const result = await submitVerification(files);
+    // Add artificial delay to let the processing animation finish its stages
+    setTimeout(() => {
+      setReport(result);
+      setAppState("report");
+    }, 6000); 
+  };
 
-        <ConnectionCard status={status} onRetry={() => runCheck()} />
-
-        <footer className="text-xs text-slate-400">
-          OBLIVION 2026 · foundation build
-        </footer>
-      </div>
-    </div>
-  );
-}
-
-function ConnectionCard({
-  status,
-  onRetry,
-}: {
-  status: BackendStatus;
-  onRetry: () => void;
-}) {
-  const meta = {
-    checking: { dot: "bg-amber-400", label: "Checking backend…" },
-    online: { dot: "bg-emerald-500", label: "Backend connected" },
-    offline: { dot: "bg-rose-500", label: "Backend offline" },
-  }[status.state];
+  const handleReset = () => {
+    setReport(null);
+    setAppState("upload");
+  };
 
   return (
-    <section className="w-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className={`h-3 w-3 rounded-full ${meta.dot}`} aria-hidden />
-        <span className="font-medium">{meta.label}</span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="ml-auto rounded-md border border-slate-200 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
-        >
-          Re-check
-        </button>
-      </div>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <svg className="w-8 h-8 text-guard-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <h1 className="text-xl font-bold tracking-tight text-guard-900">
+              EvidenceGuard
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+             <span className="text-sm text-slate-500 font-medium">Backend:</span>
+             {status.state === "online" ? (
+               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700" title={`Connected to ${status.health.service} ${status.health.version}`}>
+                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                 Online
+               </span>
+             ) : status.state === "offline" ? (
+               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-700" title={status.error}>
+                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                 Offline (Mock Mode)
+               </span>
+             ) : (
+               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                 Checking...
+               </span>
+             )}
+          </div>
+        </div>
+      </header>
 
-      <dl className="mt-4 space-y-1 text-sm text-slate-600">
-        {status.state === "online" && (
-          <>
-            <Row label="Service" value={status.health.service} />
-            <Row label="Version" value={status.health.version} />
-            <Row label="Server time" value={status.health.time} />
-          </>
-        )}
-        {status.state === "offline" && (
-          <p className="text-slate-500">
-            Could not reach <code>/health</code> ({status.error}). Start the
-            backend with{" "}
-            <code className="rounded bg-slate-100 px-1">
-              uvicorn app.main:app --port 8000
-            </code>
-            .
-          </p>
-        )}
-        {status.state === "checking" && (
-          <p className="text-slate-500">Contacting the API…</p>
-        )}
-      </dl>
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-slate-400">{label}</dt>
-      <dd className="font-mono text-slate-700">{value}</dd>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {appState === "upload" && <UploadScreen onVerify={handleVerify} />}
+        {appState === "processing" && <ProcessingScreen />}
+        {appState === "report" && report && <ReportView report={report} onReset={handleReset} />}
+      </main>
     </div>
   );
 }
