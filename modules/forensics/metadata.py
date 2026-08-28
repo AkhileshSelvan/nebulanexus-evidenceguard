@@ -41,6 +41,13 @@ IMAGE_EDITOR_PATTERNS: list[str] = [
 # Gap (in seconds) between creation and modification that's considered suspicious
 SUSPICIOUS_EDIT_GAP_SECONDS = 3600  # 1 hour
 
+# Absent metadata is weak evidence: scanners, scan apps and "print to PDF" all
+# routinely produce files with a thin or empty info dictionary. These caps keep
+# the finding visible to a reviewer while stopping it from carrying a decision.
+# (Was 40.0 / 15.0-per-field; measured firing on 6 of 9 genuine scanned PDFs.)
+MISSING_METADATA_ABSENT_SCORE = 12.0   # no metadata at all
+MISSING_METADATA_PARTIAL_CAP = 10.0    # some expected fields absent
+
 
 def extract_metadata(
     document: Document,
@@ -560,15 +567,27 @@ def _check_missing_expected_metadata(
     container: str,
     document: Document,
 ) -> MetadataSignal:
-    """Check if metadata is missing that we'd expect for this document type."""
+    """Check if metadata is missing that we'd expect for this document type.
+
+    Absence of metadata is weak evidence at best. Scanners, phone scan apps and
+    "print to PDF" routinely emit files with little or no info dictionary, and
+    many tools strip EXIF on export. On a real bundle of legitimate scanned
+    credentials this fired on 6 of 9 documents (see the calibration audit), so
+    it is reported for the reviewer but kept below the level where it can move a
+    decision on its own.
+    """
     if not raw:
         return MetadataSignal(
             id="missing_expected_metadata",
             label="Missing expected metadata",
-            score=40.0,
-            confidence=0.5,
+            score=MISSING_METADATA_ABSENT_SCORE,
+            confidence=0.25,
             passed=False,
-            detail=f"No metadata at all for a {container} file — unusual for genuine documents.",
+            detail=(
+                f"No metadata at all for a {container} file. Common for scanner "
+                "and 'print to PDF' output, so informational rather than "
+                "evidence of manipulation."
+            ),
         )
 
     missing: list[str] = []
@@ -589,10 +608,13 @@ def _check_missing_expected_metadata(
         return MetadataSignal(
             id="missing_expected_metadata",
             label="Missing expected metadata",
-            score=min(40.0, len(missing) * 15.0),
-            confidence=0.4,
+            score=min(MISSING_METADATA_PARTIAL_CAP, len(missing) * 3.0),
+            confidence=0.25,
             passed=False,
-            detail=f"Expected metadata fields missing: {', '.join(missing)}.",
+            detail=(
+                f"Expected metadata fields missing: {', '.join(missing)}. "
+                "Routine for scanned/exported documents — informational."
+            ),
         )
 
     return MetadataSignal(
