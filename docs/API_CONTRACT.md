@@ -262,27 +262,39 @@ Emitted at **two levels** with the *same shape*: once per document
 
 ```jsonc
 {
-  "engine": "stub-risk",
-  "engine_version": "0.0.0",
+  "engine": "evidenceguard-risk",
+  "engine_version": "1.0.0",
   "scope": "document",              // "document" | "bundle"
   "subject_id": "doc_9c8b7a",       // document id, or bundle id when scope=bundle
   "score": 0.0,                     // [0,100] final risk
   "severity": "low",               // "low"|"medium"|"high"|"critical" (see bands)
-  "contributions": [               // what moved the score, sorted desc by weight
+  "contributions": [               // what moved the score, sorted desc by `contribution`
     {
       "source": "forensics",       // "ocr"|"forensics"|"metadata"|"consistency"
-      "signal_id": "ela_hotspot",
-      "signal_score": 0.0,         // [0,100] from the source section
-      "weight": 0.0,               // [0,1] this signal's share of the model
-      "contribution": 0.0          // points added to `score` (signal_score*weight)
+      "signal_id": "ela_hotspot",  // scope=bundle adds a document tag — see below
+      "signal_score": 0.0,         // [0,100] as reported by the producing module
+      "weight": 0.0,               // [0,1] the source weight applied to this signal
+      "contribution": 0.0          // points of `score` this signal is responsible for
     }
   ],
   "model": {
-    "method": "weighted_sum",      // implementation detail, informational
-    "version": "0.0.0"
+    "method": "bounded_log_noisy_or",  // implementation detail, informational
+    "version": "1.0.0"
   }
 }
 ```
+
+**`contributions[].signal_id` — document tagging.** When `scope` is `"bundle"`,
+a signal that came from a specific document is tagged
+`"<signal_id>@<document_id>"` (e.g. `"ela_hotspot@doc_9c8b7a"`) so the same check
+firing on several documents stays distinguishable. Bundle-scoped signals
+(consistency checks) carry no tag. Producing modules **may** use `@` inside their
+own ids, so always split the tag from the **right** — the last `@` is the
+separator. Document-scoped `Risk` objects are never tagged.
+
+**`contributions[].contribution` sums to `score`.** The fusion is additive in log
+space, so `sum(contributions[].contribution) == score` up to rounding. Consumers
+may rely on that identity.
 
 **Severity bands** (fixed, shared by UI and tests):
 
