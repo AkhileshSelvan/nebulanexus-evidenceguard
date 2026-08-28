@@ -88,7 +88,11 @@ data/uploads/
 data/tmp/
 *.tmp
 
-# Local SQLite case store (see backend/app/db.py) — never committed
+# Local SQLite case store (see backend/app/db.py) — never committed.
+# EG_DB_PATH is resolved against the process cwd, so the file lands wherever
+# uvicorn was started from — repo root included. Ignore it everywhere.
+*.db
+*.db-journal
 backend/*.db
 backend/*.db-journal
 .remember/logs/
