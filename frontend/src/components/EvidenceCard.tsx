@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { DocumentEntry } from "../types";
+import { ReportDocumentEntry } from "../types";
 
-export function EvidenceCard({ entry }: { entry: DocumentEntry }) {
+export function EvidenceCard({ entry }: { entry: ReportDocumentEntry }) {
   const [activeTab, setActiveTab] = useState<"extraction" | "forensics" | "metadata">("extraction");
   const doc = entry.document;
 
@@ -122,7 +122,7 @@ export function EvidenceCard({ entry }: { entry: DocumentEntry }) {
               <div className="bg-slate-800 rounded-lg p-3 overflow-x-auto">
                 <pre className="text-[10px] sm:text-xs text-slate-300 font-mono leading-relaxed">
                   {Object.entries(entry.metadata.raw).map(([k, v]) => (
-                    <div key={k}><span className="text-slate-500">{k}:</span> <span className="text-emerald-300">{v}</span></div>
+                    <div key={k}><span className="text-slate-500">{k}:</span> <span className="text-emerald-300">{String(v)}</span></div>
                   ))}
                 </pre>
               </div>

@@ -1,7 +1,7 @@
-import { RiskResult, Severity } from "../types";
+import { Risk, Severity } from "../types";
 
 interface RiskBannerProps {
-  risk: RiskResult;
+  risk: Risk;
 }
 
 const SEVERITY_STYLES: Record<Severity, { text: string; bg: string; fill: string }> = {

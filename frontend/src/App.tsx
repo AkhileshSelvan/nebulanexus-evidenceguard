@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { checkHealth, submitVerification, type BackendStatus } from "./api";
-import { VerificationReport } from "./types";
+import { checkHealth, verifyBundle, type BackendStatus } from "./api";
+import type { VerificationReport } from "./types";
 import { UploadScreen } from "./components/UploadScreen";
 import { ProcessingScreen } from "./components/ProcessingScreen";
 import { ReportView } from "./components/ReportView";
 
-type AppState = "upload" | "processing" | "report";
+type AppState =
+  | { screen: "upload" }
+  | { screen: "processing" }
+  | { screen: "report"; report: VerificationReport }
+  // Honest failure state: a failed /verify call NEVER falls back to
+  // fabricated evidence -- the reviewer sees the real error and can retry.
+  | { screen: "error"; message: string };
 
 export default function App() {
   const [status, setStatus] = useState<BackendStatus>({ state: "checking" });
-  const [appState, setAppState] = useState<AppState>("upload");
-  const [report, setReport] = useState<VerificationReport | null>(null);
+  const [appState, setAppState] = useState<AppState>({ screen: "upload" });
 
   const runCheck = useCallback((signal?: AbortSignal) => {
     setStatus({ state: "checking" });
@@ -30,19 +35,19 @@ export default function App() {
   }, [runCheck]);
 
   const handleVerify = async (files: File[]) => {
-    setAppState("processing");
-    const result = await submitVerification(files);
-    // Add artificial delay to let the processing animation finish its stages
-    setTimeout(() => {
-      setReport(result);
-      setAppState("report");
-    }, 6000); 
+    setAppState({ screen: "processing" });
+    try {
+      const report = await verifyBundle(files);
+      setAppState({ screen: "report", report });
+    } catch (err) {
+      setAppState({
+        screen: "error",
+        message: err instanceof Error ? err.message : "The backend did not return a verification report.",
+      });
+    }
   };
 
-  const handleReset = () => {
-    setReport(null);
-    setAppState("upload");
-  };
+  const handleReset = () => setAppState({ screen: "upload" });
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
@@ -64,10 +69,14 @@ export default function App() {
                  Online
                </span>
              ) : status.state === "offline" ? (
-               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-700" title={status.error}>
+               <button
+                 onClick={() => runCheck()}
+                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-700 hover:bg-rose-200"
+                 title={status.error}
+               >
                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                 Offline (Mock Mode)
-               </span>
+                 Offline &middot; retry
+               </button>
              ) : (
                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -79,9 +88,26 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {appState === "upload" && <UploadScreen onVerify={handleVerify} />}
-        {appState === "processing" && <ProcessingScreen />}
-        {appState === "report" && report && <ReportView report={report} onReset={handleReset} />}
+        {appState.screen === "upload" && <UploadScreen onVerify={handleVerify} />}
+        {appState.screen === "processing" && <ProcessingScreen />}
+        {appState.screen === "report" && <ReportView report={appState.report} onReset={handleReset} />}
+        {appState.screen === "error" && (
+          <div className="max-w-lg mx-auto text-center py-16">
+            <div className="mx-auto w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-semibold text-slate-800 mb-2">Verification failed</h2>
+            <p className="text-sm text-slate-500 mb-6">{appState.message}</p>
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 bg-guard-600 text-white rounded-lg font-medium shadow-sm hover:bg-guard-700"
+            >
+              Try again
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

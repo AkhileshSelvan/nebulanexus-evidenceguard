@@ -1,10 +1,10 @@
-import { Recommendation, Decision } from "../types";
+import { Recommendation, ReviewDecision } from "../types";
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
 }
 
-const DECISION_META: Record<Decision, { icon: JSX.Element; color: string; label: string }> = {
+const DECISION_META: Record<ReviewDecision, { icon: JSX.Element; color: string; label: string }> = {
   accept: {
     icon: (
       <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
