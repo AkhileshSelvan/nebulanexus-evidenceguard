@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS, SERVICE_NAME, VERSION
-from app.routers import health, verify
+from app.routers import cases, health, verify
 
 app = FastAPI(
     title="EvidenceGuard API",
@@ -32,6 +32,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(verify.router)
+app.include_router(cases.router)
 
 
 @app.get("/", tags=["meta"])

@@ -22,3 +22,8 @@ CORS_ORIGINS = [
 # Upload guard rails (enforced in the verify router).
 MAX_FILES_PER_BUNDLE = int(os.getenv("EG_MAX_FILES", "10"))
 MAX_FILE_BYTES = int(os.getenv("EG_MAX_FILE_BYTES", str(25 * 1024 * 1024)))  # 25 MB
+
+# SQLite case store. ":memory:" is used by the test suite (see tests/conftest.py)
+# so tests never touch a file on disk. A relative path is resolved against the
+# process cwd (normally `backend/`, per the README's `uvicorn` invocation).
+DB_PATH = os.getenv("EG_DB_PATH", "evidenceguard.db")

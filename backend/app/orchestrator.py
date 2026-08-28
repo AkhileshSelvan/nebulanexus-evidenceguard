@@ -3,9 +3,11 @@
 The backend is the *only* place that imports from ``modules/``. Everything here
 follows ``docs/API_CONTRACT.md``.
 
-FOUNDATION STATUS: ingest is real (hash, size, media type). Page rasterization
-is not done yet, so ``document.pages`` is a single synthetic entry and modules
-receive no image paths. Modules return contract-shaped placeholder data.
+FOUNDATION STATUS: ingest is real (hash, size, media type). OCR receives the
+raw uploaded bytes and rasterizes/extracts for real (see modules/ocr).
+Forensics does not receive image paths yet and still returns placeholder
+data. Document.pages / page_count remain a synthetic single entry pending a
+shared rasterization step (tracked separately from OCR's own internal one).
 """
 
 from __future__ import annotations
@@ -13,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import sys
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 # --- make the repo-root ``modules`` package importable ---------------------- #
@@ -33,9 +34,7 @@ from modules.forensics import analyze, extract_metadata  # noqa: E402
 from modules.ocr import extract  # noqa: E402
 from modules.risk import explain, recommend, score_bundle, score_document  # noqa: E402
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+from app.timeutil import now_iso
 
 
 def _short_id(prefix: str) -> str:
@@ -69,7 +68,7 @@ def build_document(
                 "image_ref": f"{filename}#p1",
             }
         ],
-        received_at=_now(),
+        received_at=now_iso(),
     )
 
 
@@ -90,26 +89,31 @@ def run_pipeline(
         so the report is structurally complete but analytically empty.
     """
     bundle_id = _short_id("bnd")
+    documents: list[Document] = []
+    file_data_map: dict[str, bytes] = {}
 
-    documents: list[Document] = [
-        build_document(
+    for (name, mtype, data, dtype) in uploads:
+        doc = build_document(
             bundle_id=bundle_id,
             filename=name,
             media_type=mtype,
             data=data,
             declared_type=dtype,
         )
-        for (name, mtype, data, dtype) in uploads
-    ]
+        documents.append(doc)
+        
+        # Save file data to pass to modules
+        file_data_map[doc["id"]] = data
 
     # --- per-document stages ---------------------------------------------- #
     entries: list[ReportDocumentEntry] = []
     extractions = []
     for doc in documents:
-        extraction = extract(doc, image_paths=[])
-        forensics = analyze(doc, image_paths=[])
-        metadata = extract_metadata(doc, file_path=None)
-        doc_risk = score_document(doc["id"], forensics, metadata)
+        data = file_data_map[doc["id"]]
+        extraction = extract(doc, data)
+        forensics = analyze(doc, image_paths=[], file_data=data)
+        metadata = extract_metadata(doc, file_path=None, file_data=data)
+        doc_risk = score_document(doc["id"], forensics, metadata, extraction)
 
         extractions.append(extraction)
         entries.append(
@@ -131,7 +135,7 @@ def run_pipeline(
 
     return VerificationReport(
         report_id=_short_id("rep"),
-        created_at=_now(),
+        created_at=now_iso(),
         status="complete",
         bundle=ReportBundle(bundle_id=bundle_id, document_count=len(documents)),
         documents=entries,

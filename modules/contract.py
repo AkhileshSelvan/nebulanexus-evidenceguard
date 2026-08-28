@@ -36,12 +36,22 @@ DEFAULT_DECISION_FOR_SEVERITY: dict[Severity, Literal["accept", "review", "rejec
 
 
 def severity_for_score(score: float) -> Severity:
-    """Map a 0–100 risk score onto its severity band."""
+    """Map a 0–100 risk score onto its severity band.
+
+    The bands are written as inclusive integer ranges (0–24, 25–49, …) but
+    scores are continuous, so each band's upper bound is treated as exclusive at
+    the next band's lower bound: ``low`` is ``[0, 25)``, ``medium`` ``[25, 50)``,
+    ``high`` ``[50, 75)``, ``critical`` ``[75, 100]``. Without this a score of
+    e.g. 49.3 would fall through every band and hit the fallback below — which
+    silently reported it as ``critical``.
+    """
     clamped = max(0.0, min(100.0, float(score)))
     for band, (low, high) in SEVERITY_BANDS.items():
-        if low <= clamped <= high:
+        if low <= clamped < high + 1:
             return band
-    return "critical"  # unreachable given the bands above, kept for type-safety
+    # Unreachable: the bands above tile [0, 100] with no gaps, and `clamped` is
+    # confined to that range. Kept so the function is total for the type checker.
+    return "critical"
 
 
 # --------------------------------------------------------------------------- #
