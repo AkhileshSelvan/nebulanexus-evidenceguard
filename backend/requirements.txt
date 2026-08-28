@@ -1,0 +1,6 @@
+# EvidenceGuard backend — runtime deps only. Keep this list minimal.
+# Add a module's libraries under a "# <module>" comment with a one-line reason.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20   # required by FastAPI for multipart/form-data file uploads

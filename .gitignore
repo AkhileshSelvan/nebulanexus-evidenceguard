@@ -1,0 +1,91 @@
+# ─────────────────────────────  Python / backend  ─────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Test / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.tox/
+.nox/
+
+# ─────────────────────────────  Node / frontend  ──────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# Build output
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# Vite / bundler caches
+.vite/
+.cache/
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+*.log
+
+# ─────────────────────────────  Environment / secrets  ────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ─────────────────────────────  Editors / OS  ─────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─────────────────────────────  Project-specific  ─────────────────────────────
+# Uploaded / generated artifacts at runtime — keep curated samples in data/demo/
+data/uploads/
+data/tmp/
+*.tmp
+.remember/logs/
+.remember/tmp/
