@@ -17,15 +17,23 @@
 
 ```python
 from modules.ocr import extract
-extraction = extract(document, image_paths=[...])   # -> Extraction (contract §2)
+extraction = extract(document, data)   # data: bytes = the raw uploaded file
+                                        # -> Extraction (contract §2)
 ```
 
 `extract()` must always return a contract-valid `Extraction`, even on failure
 (empty `fields`, `text_confidence = 0.0`). Raising is allowed only for truly
 unexpected errors — the backend will convert it to a `ModuleError`.
 
+This module owns rasterization too: `extract()` decodes `data` itself
+(`rasterize.py` — Pillow for JPG/JPEG/PNG, PyMuPDF for PDF), so the backend
+does not need to pre-render pages or pass image paths.
+
 ## Dependencies
 
-None yet. Add OCR libs (`pytesseract`, `rapidocr-onnxruntime`, a cloud client,
-…) in a later checkpoint and list them in `backend/requirements.txt` under an
-`# ocr` comment, with a one-line justification in the PR.
+`pillow`, `pytesseract`, `pymupdf` — pinned in `backend/requirements.txt`
+under the `# ocr` comment. `pytesseract` additionally needs the **Tesseract
+OCR binary** on the host (`apt install tesseract-ocr`, or set `TESSERACT_CMD`
+if it's installed somewhere non-standard). If Tesseract isn't found, `extract()`
+still returns a valid (empty-text) `Extraction` with a warning — it never
+fabricates output or raises for a missing binary.

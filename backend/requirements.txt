@@ -4,3 +4,9 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 python-multipart==0.0.20   # required by FastAPI for multipart/form-data file uploads
+
+# ocr — decode PDF/JPG/JPEG/PNG into page images and run local OCR on them.
+# Also requires the Tesseract OCR binary on the host (apt: tesseract-ocr).
+pillow==12.1.1
+pytesseract==0.3.13
+pymupdf==1.28.2

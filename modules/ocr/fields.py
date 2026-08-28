@@ -92,7 +92,14 @@ def _find_dates(text: str) -> list[re.Match[str]]:
 _ID_VALUE = re.compile(r"\b(?=[A-Za-z0-9-]{5,20}\b)(?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]+\b")
 _MONEY = re.compile(
     r"(?P<cur>₹|Rs\.?|INR|\$|USD|US\$|€|EUR|£|GBP)\s?"
-    r"(?P<amt>\d{1,3}(?:[,\s]\d{2,3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)",
+    # NOTE: the grouped-thousands branch requires >=1 group (`+`, not `*`).
+    # With `*` it could match on zero groups -- i.e. just the first 1-3
+    # digits of an *ungrouped* number like "45000.00" -- and since regex
+    # alternation here is leftmost-first (not longest-match), that partial
+    # hit would win over the second alternative and silently truncate the
+    # amount (e.g. "Rs. 45000.00" -> "Rs. 450"). Requiring >=1 group means
+    # ungrouped numbers always fall through to the unambiguous second branch.
+    r"(?P<amt>\d{1,3}(?:[,\s]\d{2,3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)",
     re.IGNORECASE,
 )
 _BARE_AMOUNT = re.compile(r"\b\d{1,3}(?:,\d{3})+(?:\.\d{2})?\b|\b\d+\.\d{2}\b")

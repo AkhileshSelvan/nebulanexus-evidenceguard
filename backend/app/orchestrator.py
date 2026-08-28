@@ -3,9 +3,11 @@
 The backend is the *only* place that imports from ``modules/``. Everything here
 follows ``docs/API_CONTRACT.md``.
 
-FOUNDATION STATUS: ingest is real (hash, size, media type). Page rasterization
-is not done yet, so ``document.pages`` is a single synthetic entry and modules
-receive no image paths. Modules return contract-shaped placeholder data.
+FOUNDATION STATUS: ingest is real (hash, size, media type). OCR receives the
+raw uploaded bytes and rasterizes/extracts for real (see modules/ocr).
+Forensics does not receive image paths yet and still returns placeholder
+data. Document.pages / page_count remain a synthetic single entry pending a
+shared rasterization step (tracked separately from OCR's own internal one).
 """
 
 from __future__ import annotations
@@ -105,8 +107,8 @@ def run_pipeline(
     # --- per-document stages ---------------------------------------------- #
     entries: list[ReportDocumentEntry] = []
     extractions = []
-    for doc in documents:
-        extraction = extract(doc, image_paths=[])
+    for (name, mtype, data, dtype), doc in zip(uploads, documents):
+        extraction = extract(doc, data)
         forensics = analyze(doc, image_paths=[])
         metadata = extract_metadata(doc, file_path=None)
         doc_risk = score_document(doc["id"], forensics, metadata)
