@@ -1,8 +1,13 @@
 # EvidenceGuard — Shared JSON Contract
 
-**Status:** v0.1.1. **This document is the source of truth.**
+**Status:** v0.1.2. **This document is the source of truth.**
 Every module and both apps depend on these shapes. Do not change a field without
 updating this file and notifying the team.
+
+**v0.1.2 (backend checkpoint):** additive only — case storage, reviewer
+decisions, and the audit trail were added (§12). `POST /api/v1/verify` now has
+a side effect (it persists the report as a case) but its request/response
+shape is unchanged.
 
 **v0.1.1 (OCR checkpoint):** additive only — `extraction.warnings` and
 `extraction.pages` were added (§2). No existing field changed shape.
@@ -387,9 +392,109 @@ report — the backend records this and continues.
 (so `document` and `metadata.raw` are real) and calls each module, which returns
 contract-shaped placeholder data. No real OCR/forensic/AI work happens yet.
 
+Since v0.1.2, `POST /api/v1/verify` also **persists** the resulting report as
+a case (§12) and writes a `report_created` audit event. This does not change
+the request or the response — it's a side effect a caller can ignore.
+
 ---
 
 ## 11. Python contract module
+
+`modules/contract.py` holds `TypedDict` definitions matching every section here,
+plus `SEVERITY_BANDS` and helper `severity_for_score(score) -> str`. Modules
+import their types from there so a contract change breaks `mypy`, not prod.
+
+---
+
+## 12. Case storage, reviewer decisions & audit trail — owner: `backend`
+
+Added in v0.1.2. A **case** is one persisted `VerificationReport` plus
+whatever a human reviewer later decides about it. The backend is the only
+writer; nothing here changes how the analysis modules work or what `/verify`
+returns.
+
+| Method | Path | Body | Returns |
+|--------|------|------|---------|
+| `GET` | `/api/v1/cases` | — (query: `limit` default 50 max 200, `offset` default 0) | `{ "cases": [CaseSummary, …] }`, newest first |
+| `GET` | `/api/v1/cases/{report_id}` | — | `CaseDetail` |
+| `POST` | `/api/v1/cases/{report_id}/decision` | `DecisionRequest` | `DecisionResult` |
+| `GET` | `/api/v1/cases/{report_id}/audit` | — | `{ "report_id": …, "events": [AuditEvent, …] }`, oldest first |
+
+Unknown `report_id` → `404` on every one of these.
+
+### `CaseSummary`
+
+```jsonc
+{
+  "report_id": "rep_7f3c1a92",
+  "bundle_id": "bnd_1a2b3c",
+  "created_at": "2026-08-28T10:36:00Z",
+  "status": "complete",
+  "document_count": 3,
+  "risk_score": 0.0,
+  "risk_severity": "low",
+  "recommendation_decision": "accept",
+  "reviewer_decision": null,          // null until a reviewer decides
+  "reviewer_name": null,
+  "reviewer_notes": null,
+  "reviewed_at": null
+}
+```
+
+### `CaseDetail` — `GET /api/v1/cases/{report_id}`
+
+```jsonc
+{
+  "report": { /* the full VerificationReport, §0, exactly as /verify returned it */ },
+  "reviewer_decision": "review",      // "accept" | "review" | "reject" | null
+  "reviewer_name": "Bagavathianu",
+  "reviewer_notes": "Needs a second pass.",
+  "reviewed_at": "2026-08-28T11:02:00Z"
+}
+```
+
+### `DecisionRequest` — body of `POST /api/v1/cases/{report_id}/decision`
+
+```jsonc
+{
+  "decision": "review",               // "accept" | "review" | "reject" — required
+  "reviewer_name": "Bagavathianu",    // required, 1-200 chars
+  "notes": "Needs a second pass."     // optional, up to 4000 chars
+}
+```
+
+A case holds a single **current** decision — posting again overwrites it
+(e.g. escalated → accepted on recheck). Nothing is lost: every post is also
+appended to the audit trail (§12 `AuditEvent`), so the full decision history
+is always recoverable from `GET /api/v1/cases/{report_id}/audit`, even though
+`CaseSummary`/`CaseDetail` only ever show the latest one.
+
+### `DecisionResult` — response of the same endpoint
+
+```jsonc
+{
+  "report_id": "rep_7f3c1a92",
+  "reviewer_decision": "review",
+  "reviewer_name": "Bagavathianu",
+  "reviewer_notes": "Needs a second pass.",
+  "reviewed_at": "2026-08-28T11:02:00Z"
+}
+```
+
+### `AuditEvent`
+
+Append-only — a case's audit trail is never edited or truncated.
+
+```jsonc
+{
+  "id": "aud_9f2c1a8b7c3d",
+  "report_id": "rep_7f3c1a92",
+  "event_type": "decision_recorded",   // "report_created" | "decision_recorded"
+  "actor": "Bagavathianu",             // null for system-generated events (e.g. report_created)
+  "detail": { "decision": "review", "notes": "Needs a second pass." },
+  "at": "2026-08-28T11:02:00Z"
+}
+```
 
 `modules/contract.py` holds `TypedDict` definitions matching every section here,
 plus `SEVERITY_BANDS` and helper `severity_for_score(score) -> str`. Modules

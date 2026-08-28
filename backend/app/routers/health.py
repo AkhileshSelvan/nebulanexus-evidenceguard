@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter
 
 from app.config import SERVICE_NAME, VERSION
+from app.timeutil import now_iso
 
 router = APIRouter(tags=["meta"])
 
@@ -18,5 +17,5 @@ def health() -> dict[str, str]:
         "status": "ok",
         "service": SERVICE_NAME,
         "version": VERSION,
-        "time": datetime.now(timezone.utc).isoformat(),
+        "time": now_iso(),
     }

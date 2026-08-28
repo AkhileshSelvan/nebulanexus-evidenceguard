@@ -1,16 +1,19 @@
 """Verification endpoints.
 
 `GET  /api/v1/ping`   — trivial connectivity check for the frontend.
-`POST /api/v1/verify` — ingest 1..n files and return a VerificationReport.
+`POST /api/v1/verify` — ingest 1..n files, return a VerificationReport, and
+                        persist it as a case (see `app.storage`, `app.audit`).
 
 FOUNDATION STATUS: `/verify` ingests real files but every analysis module is a
-stub, so the report is contract-valid with placeholder findings.
+stub, so the report is contract-valid with placeholder findings. Case storage
+and the audit trail are real.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from app import audit, storage
 from app.config import MAX_FILE_BYTES, MAX_FILES_PER_BUNDLE
 from app.orchestrator import run_pipeline
 
@@ -56,4 +59,17 @@ async def verify(
             (upload.filename or f"file_{idx}", upload.content_type or "", data, declared)
         )
 
-    return run_pipeline(uploads)
+    report = run_pipeline(uploads)
+
+    storage.save_case(report)
+    audit.record(
+        report_id=report["report_id"],
+        event_type="report_created",
+        actor=None,
+        detail={
+            "document_count": report["bundle"]["document_count"],
+            "status": report["status"],
+        },
+    )
+
+    return report

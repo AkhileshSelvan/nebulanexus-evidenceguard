@@ -13,7 +13,6 @@ from __future__ import annotations
 import hashlib
 import sys
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 # --- make the repo-root ``modules`` package importable ---------------------- #
@@ -33,9 +32,7 @@ from modules.forensics import analyze, extract_metadata  # noqa: E402
 from modules.ocr import extract  # noqa: E402
 from modules.risk import explain, recommend, score_bundle, score_document  # noqa: E402
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+from app.timeutil import now_iso
 
 
 def _short_id(prefix: str) -> str:
@@ -69,7 +66,7 @@ def build_document(
                 "image_ref": f"{filename}#p1",
             }
         ],
-        received_at=_now(),
+        received_at=now_iso(),
     )
 
 
@@ -131,7 +128,7 @@ def run_pipeline(
 
     return VerificationReport(
         report_id=_short_id("rep"),
-        created_at=_now(),
+        created_at=now_iso(),
         status="complete",
         bundle=ReportBundle(bundle_id=bundle_id, document_count=len(documents)),
         documents=entries,
