@@ -1,8 +1,14 @@
-"""Generate synthetic demo cases for forensic analysis testing.
+"""Generate synthetic demo cases for EvidenceGuard forensic analysis.
 
-Each fixture is designed to reliably trigger (or not trigger) specific
-forensic signals. Run from the repo root:
+Creates a suite of test documents across five categories:
+  1. genuine_clean   — should pass all forensic checks
+  2. tampered_ela    — triggers ELA (spliced high-frequency patch)
+  3. tampered_copymove — triggers copy-move (duplicated region)
+  4. low_quality_scan — triggers noise inconsistency (smooth splice on noisy bg)
+  5. tampered_metadata — PDF with future dates & image-editor producer
+  6. contradictory_bundle — two PDFs whose metadata contradict each other
 
+Run from the repo root:
     python scripts/generate_fixtures.py
 
 Produces files in data/demo/cases/.
@@ -20,7 +26,7 @@ from PIL import Image, ImageDraw, ImageFilter
 # ---------------------------------------------------------------------------
 
 
-def _natural_scene(w: int = 800, h: int = 600) -> Image.Image:
+def _natural_scene(w: int = 800, h: int = 600, seed: int = 12345) -> Image.Image:
     """Create a natural-looking scene with spatially varying content.
 
     Uses smooth gradients and organic shapes so that:
@@ -28,7 +34,7 @@ def _natural_scene(w: int = 800, h: int = 600) -> Image.Image:
     - Noise variance is spatially consistent
     - No periodic histogram structure (no double-compression FP)
     """
-    rng = np.random.default_rng(12345)
+    rng = np.random.default_rng(seed)
 
     # Smooth gradient background
     ys = np.linspace(0, 1, h)[:, None]
@@ -76,9 +82,6 @@ def gen_tampered_ela():
     When ELA resaves at Q=90:
     - Smooth base: Q=95→Q=90 barely changes it → low ELA diff
     - Noisy patch: Q=95→Q=90 alters high-frequency info → high ELA diff
-
-    This exploits the fact that JPEG quality changes affect high-frequency
-    content much more than smooth content.
     """
     base = _natural_scene()
 
@@ -89,14 +92,33 @@ def gen_tampered_ela():
     base = Image.open(buf)
     base.load()
 
-    # Fresh patch with random noise (high-frequency content).
-    # This will have much larger ELA diffs than the smooth base.
+    # Fresh patch with random noise (high-frequency content)
     rng = np.random.default_rng(99999)
     patch_arr = rng.integers(0, 256, (180, 250, 3), dtype=np.uint8)
     patch = Image.fromarray(patch_arr)
 
     base.paste(patch, (280, 200))
     base.save("data/demo/cases/tampered_ela.jpg", "JPEG", quality=95)
+
+
+def gen_tampered_copymove():
+    """An image with a genuinely duplicated region to trigger copy-move.
+
+    Copies a textured (non-uniform) region to a distant location within
+    the same image. The copy-move detector should find matching blocks.
+    """
+    img = _natural_scene(seed=54321)
+
+    # Copy a non-uniform region (std >> 8 to pass the uniform filter)
+    # Align to 16x16 boundaries so JPEG compression artifacts match perfectly
+    src_box = (64, 64, 256, 256)  # 192×192 region
+    region = img.crop(src_box)
+
+    # Duplicate it to multiple distant locations (also 16-aligned)
+    for dst in [(496, 352), (496, 64), (64, 352)]:
+        img.paste(region, dst)
+
+    img.save("data/demo/cases/tampered_copymove.jpg", "JPEG", quality=95)
 
 
 def gen_low_quality_scan():
@@ -121,7 +143,13 @@ def gen_low_quality_scan():
 
 
 def gen_tampered_metadata_pdf():
-    """A PDF with future timestamps and image-editor producer metadata."""
+    """A PDF with future timestamps and image-editor producer metadata.
+
+    Signals expected to fail:
+    - future_timestamp
+    - editor_is_image_tool
+    - producer_mismatch_for_issuer (when declared as bank_statement)
+    """
     import pikepdf
 
     pdf = pikepdf.Pdf.new()
@@ -142,6 +170,60 @@ def gen_tampered_metadata_pdf():
     pdf.save("data/demo/cases/tampered_metadata.pdf")
 
 
+def gen_contradictory_metadata_pdf():
+    """A PDF where modification date is BEFORE creation date.
+
+    Also has mismatched timezones (created UTC, modified UTC+5).
+    Signals expected to fail:
+    - modified_after_creation (modified before created)
+    - timezone_mismatch
+    """
+    import pikepdf
+
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page(page_size=(612, 792))
+
+    # Created "recently", but modified "yesterday" — impossible
+    now = datetime.now(timezone.utc)
+    created_str = now.strftime("D:%Y%m%d%H%M%S+00'00'")
+    yesterday = now - timedelta(days=1)
+    modified_str = yesterday.strftime("D:%Y%m%d%H%M%S+05'30'")  # different TZ
+
+    docinfo = pdf.docinfo
+    docinfo["/CreationDate"] = created_str
+    docinfo["/ModDate"] = modified_str
+    docinfo["/Producer"] = "wkhtmltopdf 0.12.6"
+    docinfo["/Creator"] = "wkhtmltopdf"
+
+    pdf.save("data/demo/cases/contradictory_metadata.pdf")
+
+
+def gen_clean_metadata_pdf():
+    """A clean PDF with consistent, plausible metadata.
+
+    Expected: all metadata signals should PASS.
+    """
+    import pikepdf
+
+    pdf = pikepdf.Pdf.new()
+    pdf.add_blank_page(page_size=(612, 792))
+
+    now = datetime.now(timezone.utc)
+    created = now - timedelta(days=2)
+    created_str = created.strftime("D:%Y%m%d%H%M%S+00'00'")
+    # Modified 1 hour after creation
+    modified = created + timedelta(hours=1)
+    modified_str = modified.strftime("D:%Y%m%d%H%M%S+00'00'")
+
+    docinfo = pdf.docinfo
+    docinfo["/CreationDate"] = created_str
+    docinfo["/ModDate"] = modified_str
+    docinfo["/Producer"] = "wkhtmltopdf 0.12.6"
+    docinfo["/Creator"] = "wkhtmltopdf"
+
+    pdf.save("data/demo/cases/clean_metadata.pdf")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -151,8 +233,11 @@ def generate_fixtures():
     os.makedirs("data/demo/cases", exist_ok=True)
     gen_genuine_clean()
     gen_tampered_ela()
+    gen_tampered_copymove()
     gen_low_quality_scan()
     gen_tampered_metadata_pdf()
+    gen_contradictory_metadata_pdf()
+    gen_clean_metadata_pdf()
     print("All fixtures generated in data/demo/cases/")
 
 
