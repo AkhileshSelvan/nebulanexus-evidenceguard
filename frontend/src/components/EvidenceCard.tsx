@@ -1,5 +1,6 @@
 import type { ForensicSignal, MetadataSignal, ReportDocumentEntry } from "../types";
 import { Disclosure } from "./Disclosure";
+import { displayLabel, displayText, isInformationalSignal } from "../report-model";
 
 /**
  * Per-document evidence, grouped by source with the important findings first.
@@ -18,7 +19,7 @@ type AnySignal = ForensicSignal | MetadataSignal;
 
 /** A finding the analyzer recorded but deliberately did not score. */
 function isInformational(s: AnySignal): boolean {
-  return (s.detail ?? "").includes("[informational:");
+  return isInformationalSignal(s.detail);
 }
 
 function SignalRow({ signal }: { signal: AnySignal }) {
@@ -35,7 +36,7 @@ function SignalRow({ signal }: { signal: AnySignal }) {
   return (
     <li className="signal-row rounded-lg px-2.5 py-2">
       <div className="flex items-start justify-between gap-3">
-        <span className="text-sm font-medium text-slate-800">{signal.label}</span>
+        <span className="text-sm font-medium text-slate-800">{displayLabel(signal.label)}</span>
         <span className="flex flex-shrink-0 items-center gap-1.5">
           {flagged && (
             <span className="tabular text-xs font-semibold text-slate-500">
@@ -48,7 +49,7 @@ function SignalRow({ signal }: { signal: AnySignal }) {
         </span>
       </div>
       {signal.detail && (
-        <p className="mt-1 text-xs leading-relaxed text-slate-600">{signal.detail}</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-600">{displayText(signal.detail)}</p>
       )}
       {"regions" in signal && signal.regions.length > 0 && (
         <p className="mt-1 text-[11px] text-slate-500">
@@ -88,7 +89,7 @@ function SourceSection({
           </span>
         )}
       </div>
-      {summary && <p className="mb-2 text-xs text-slate-500">{summary}</p>}
+      {summary && <p className="mb-2 text-xs text-slate-500">{displayText(summary)}</p>}
 
       {flagged.length > 0 && (
         <ul className="space-y-1">

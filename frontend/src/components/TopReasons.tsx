@@ -1,4 +1,5 @@
 import type { Reason } from "../report-model";
+import { displayLabel, displayText } from "../report-model";
 import { stagger } from "../motion";
 import { Disclosure } from "./Disclosure";
 
@@ -18,7 +19,7 @@ function ReasonRow({ reason, rank }: { reason: Reason; rank: number }) {
       <div className="min-w-0 flex-1">
         {/* WHAT happened */}
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-sm font-semibold text-slate-900">{reason.what}</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{displayLabel(reason.what)}</h3>
           <span className="tabular flex-shrink-0 text-xs font-semibold text-slate-500">
             +{reason.points.toFixed(1)}
           </span>
@@ -37,7 +38,7 @@ function ReasonRow({ reason, rank }: { reason: Reason; rank: number }) {
 
         {/* WHY it matters — the producing module's own words, verbatim. */}
         {reason.why && (
-          <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{reason.why}</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{displayText(reason.why)}</p>
         )}
       </div>
     </li>

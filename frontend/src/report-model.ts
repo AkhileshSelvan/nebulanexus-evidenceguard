@@ -30,6 +30,88 @@ function humanise(id: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/**
+ * Display-only label overrides.
+ *
+ * "Modified significantly after creation" reads as an accusation; a document
+ * edited after creation is an ordinary fact (re-export, scanner app, page
+ * merge) and the score already reflects how much weight it carries. The
+ * neutral wording is applied here rather than in the analyzer because the
+ * backend owns that label and is out of scope for presentation work.
+ */
+const LABEL_OVERRIDES: Record<string, string> = {
+  "Modified significantly after creation": "Modified after creation",
+  "Modified shortly after creation": "Modified after creation",
+};
+
+export function displayLabel(label: string): string {
+  return LABEL_OVERRIDES[label] ?? label;
+}
+
+/**
+ * Same overrides, applied inside longer backend prose.
+ *
+ * Section summaries embed the label ("1 metadata concern(s): Modified
+ * significantly after creation."), so an exact-match lookup misses them. This
+ * substitutes only the known phrases above — it is not general rewriting of
+ * analyzer text, which is always rendered verbatim otherwise.
+ */
+export function displayText(text: string): string {
+  let out = text;
+  for (const [from, to] of Object.entries(LABEL_OVERRIDES)) {
+    out = out.split(from).join(to);
+  }
+  return out;
+}
+
+/**
+ * Materiality threshold for "does a reviewer need to look at this document?".
+ *
+ * Not an arbitrary number: the risk calibration already encoded which evidence
+ * is weak, by capping it. `MISSING_METADATA_ABSENT_SCORE` is 12.0 and
+ * `MISSING_METADATA_PARTIAL_CAP` is 10.0, so anything at or below 12 is, by the
+ * analyzer's own reckoning, not something to act on alone. Measured on a real
+ * bundle of nine legitimate scanned credentials, everything below this line was
+ * ELA at 0.1-3.4 (documented as non-discriminating on scanned input) or capped
+ * metadata at 3.0-6.0; the two findings above it were the genuine
+ * modified-after-creation gaps.
+ */
+export const MATERIAL_SCORE_THRESHOLD = 12;
+
+/**
+ * Signal classes the calibration documented as weak evidence. They stay fully
+ * visible in the document's evidence, but on their own they do not make a
+ * document "needs review".
+ */
+const WEAK_SIGNAL_IDS = new Set([
+  "missing_expected_metadata",
+  "ocr_low_text_confidence",
+  "ocr_no_text_extracted",
+]);
+
+/** A finding the analyzer recorded but deliberately did not score. */
+export function isInformationalSignal(detail: string | undefined): boolean {
+  return (detail ?? "").includes("[informational:");
+}
+
+/**
+ * Is this signal something a reviewer should actually act on?
+ *
+ * Presentation classification only — it never changes the signal, its score, or
+ * the document's risk. It decides placement, nothing else.
+ */
+export function isMaterialSignal(s: {
+  id: string;
+  score: number;
+  passed: boolean;
+  detail?: string;
+}): boolean {
+  if (s.passed) return false;
+  if (isInformationalSignal(s.detail)) return false;
+  if (WEAK_SIGNAL_IDS.has(s.id)) return false;
+  return s.score > MATERIAL_SCORE_THRESHOLD;
+}
+
 const SOURCE_LABEL: Record<RiskContribution["source"], string> = {
   ocr: "Document text",
   forensics: "Image forensics",
@@ -122,29 +204,35 @@ export interface DocumentSummary {
   severity: ReportDocumentEntry["risk"]["severity"];
   /** Signals the producing module flagged (passed === false). */
   flaggedCount: number;
-  /** The strongest flagged finding, for the one-line summary. */
+  /** Flagged findings that clear the materiality bar — the ones to act on. */
+  materialCount: number;
+  /** The strongest material finding, for the one-line summary. */
   topIssue: string | null;
+  /** Flagged but weak/informational — shown in the document, not promoted. */
+  minorCount: number;
   /** Findings recorded but deliberately not scored (e.g. PDF pipeline artifacts). */
   informationalCount: number;
+  /** True only when a material finding exists. Placement only. */
   needsAttention: boolean;
 }
 
 /**
- * Documents ordered by their own risk score, with a one-line "most important
- * issue". `needsAttention` marks the ones worth showing first; the rest stay
- * available behind "View all documents" — nothing is removed.
+ * Documents ordered by their own risk score, split by whether they carry a
+ * finding a reviewer should act on.
+ *
+ * Placement only. Every document, and every finding inside it, remains present
+ * and reachable — documents without a material finding move behind "View
+ * remaining documents" rather than being dropped. Previously any flagged signal
+ * at all promoted a document, so nine legitimate scans all read as "need
+ * attention" on the strength of noise-floor ELA and capped metadata.
  */
 export function summariseDocuments(report: VerificationReport): DocumentSummary[] {
   return report.documents
     .map((entry) => {
-      const flagged = [
-        ...entry.forensics.signals.filter((s) => !s.passed),
-        ...entry.metadata.signals.filter((s) => !s.passed),
-      ].sort((a, b) => b.score - a.score);
-
-      const informational = [...entry.forensics.signals, ...entry.metadata.signals].filter(
-        (s) => (s.detail ?? "").includes("[informational:"),
-      ).length;
+      const all = [...entry.forensics.signals, ...entry.metadata.signals];
+      const flagged = all.filter((s) => !s.passed).sort((a, b) => b.score - a.score);
+      const material = flagged.filter((s) => isMaterialSignal(s));
+      const informational = all.filter((s) => isInformationalSignal(s.detail)).length;
 
       return {
         entry,
@@ -152,9 +240,11 @@ export function summariseDocuments(report: VerificationReport): DocumentSummary[
         riskScore: entry.risk.score,
         severity: entry.risk.severity,
         flaggedCount: flagged.length,
-        topIssue: flagged.length > 0 ? flagged[0].label : null,
+        materialCount: material.length,
+        topIssue: material.length > 0 ? displayLabel(material[0].label) : null,
+        minorCount: flagged.length - material.length,
         informationalCount: informational,
-        needsAttention: flagged.length > 0 || entry.risk.score > 0,
+        needsAttention: material.length > 0,
       };
     })
     .sort((a, b) => b.riskScore - a.riskScore);

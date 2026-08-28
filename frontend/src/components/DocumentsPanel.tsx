@@ -16,7 +16,13 @@ function DocumentRow({ doc, index }: { doc: DocumentSummary; index: number }) {
     <li className="eg-slide-in" style={stagger(index)}>
       <Disclosure
         summary={doc.filename}
-        hint={doc.topIssue ?? (doc.flaggedCount === 0 ? "no findings" : undefined)}
+        hint={
+          doc.minorCount > 0
+            ? `${doc.minorCount} minor`
+            : doc.flaggedCount === 0
+              ? "no findings"
+              : undefined
+        }
       >
         {/* The full per-document evidence view lives here, unchanged. */}
         <EvidenceCard entry={doc.entry} />
@@ -43,9 +49,12 @@ function AttentionRow({ doc, index }: { doc: DocumentSummary; index: number }) {
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-slate-900">{doc.filename}</span>
             <span className="block truncate text-xs text-slate-500">
-              {doc.topIssue ?? "No flagged findings"}
-              {doc.flaggedCount > 1 && (
-                <span className="text-slate-500"> +{doc.flaggedCount - 1} more</span>
+              {doc.topIssue ?? "No material findings"}
+              {doc.materialCount > 1 && (
+                <span className="text-slate-500"> +{doc.materialCount - 1} more to review</span>
+              )}
+              {doc.minorCount > 0 && (
+                <span className="text-slate-500"> · {doc.minorCount} minor</span>
               )}
             </span>
           </span>
@@ -65,44 +74,60 @@ function AttentionRow({ doc, index }: { doc: DocumentSummary; index: number }) {
 }
 
 export function DocumentsPanel({ documents }: { documents: DocumentSummary[] }) {
-  const attention = documents.filter((d) => d.needsAttention);
-  const clean = documents.filter((d) => !d.needsAttention);
+  /* Material findings decide placement only — every document below is still
+     rendered, with all of its evidence, one interaction away. */
+  const needsReview = documents.filter((d) => d.needsAttention);
+  const remaining = documents.filter((d) => !d.needsAttention);
+  const minorInRemaining = remaining.reduce((n, d) => n + d.minorCount, 0);
 
   return (
     <section className="eg-card p-5" aria-labelledby="docs-heading">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 id="docs-heading" className="text-base font-bold text-slate-900">
           Documents
         </h2>
         <span className="text-xs text-slate-500">
-          {attention.length > 0
-            ? `${attention.length} of ${documents.length} need attention`
-            : `${documents.length} document${documents.length === 1 ? "" : "s"}, none flagged`}
+          {needsReview.length > 0 ? (
+            <>
+              <span className="font-semibold text-slate-700">
+                {needsReview.length} need review
+              </span>
+              <span aria-hidden="true"> · </span>
+              {remaining.length} no material findings
+            </>
+          ) : (
+            `${documents.length} document${documents.length === 1 ? "" : "s"} · no material findings`
+          )}
         </span>
       </div>
 
-      {attention.length > 0 ? (
+      {needsReview.length > 0 ? (
         <ul className="space-y-2">
-          {attention.map((d, i) => (
+          {needsReview.map((d, i) => (
             <AttentionRow key={d.entry.document.id} doc={d} index={i} />
           ))}
         </ul>
       ) : (
-        <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
-          No document raised a scored finding.
+        <p className="rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+          No document carries a finding that needs a reviewer's attention.
         </p>
       )}
 
-      {/* Everything else is still one click away. */}
-      {clean.length > 0 && (
+      {remaining.length > 0 && (
         <div className="mt-3">
           <Disclosure
-            summary={`View all documents`}
-            count={documents.length}
+            summary="View remaining documents"
+            count={remaining.length}
+            hint={minorInRemaining > 0 ? `${minorInRemaining} minor finding${minorInRemaining === 1 ? "" : "s"}` : undefined}
             tone="quiet"
           >
+            <p className="mb-3 text-xs leading-relaxed text-slate-500">
+              These carry only low-impact findings — noise-floor image analysis, or
+              metadata a scanner routinely omits. Every finding is still listed inside
+              each document.
+            </p>
             <ul className="space-y-2">
-              {clean.map((d, i) => (
+              {remaining.map((d, i) => (
                 <DocumentRow key={d.entry.document.id} doc={d} index={i} />
               ))}
             </ul>
