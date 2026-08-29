@@ -66,14 +66,22 @@ export function DecisionHistory({ onBack }: DecisionHistoryProps) {
     [cases, query],
   );
 
-  // A case's decision history is every decision_recorded event, in the
-  // order the backend already returns them (oldest first, real insertion
-  // order -- see backend/app/audit.py). This is the actual gap this screen
-  // fills: CaseSummary/CaseDetail only ever expose the LATEST decision, but
-  // every earlier one a reviewer made is already stored and retrievable
-  // here, never discarded.
+  // A case's decision history is every decision_recorded event. This is the
+  // actual gap this screen fills: CaseSummary/CaseDetail only ever expose the
+  // LATEST decision, but every earlier one a reviewer made is already stored
+  // and retrievable here, never discarded.
+  //
+  // Display order is newest-first, derived by REVERSING the backend's
+  // sequence -- never by sorting on `at`. The audit endpoint is authoritative
+  // and returns true insertion order (ORDER BY rowid ASC, see
+  // backend/app/audit.py::list_for_case); `at` is only second-precision, so
+  // several decisions on one case routinely share a timestamp and any
+  // timestamp sort would reorder them arbitrarily. Reversing the
+  // already-ordered sequence keeps same-second decisions in their real
+  // relative order. `.filter()` returns a fresh array, so reversing it here
+  // never mutates the fetched `events`.
   const decisionEvents = useMemo(
-    () => (events ?? []).filter((e) => e.event_type === "decision_recorded"),
+    () => (events ?? []).filter((e) => e.event_type === "decision_recorded").reverse(),
     [events],
   );
 

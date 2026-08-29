@@ -50,10 +50,13 @@ function makeEvent(overrides: Partial<AuditEvent> = {}): AuditEvent {
  *
  * Two properties of the real endpoint this fixture preserves:
  *  - `report_created` always leads the trail and is NOT a decision.
- *  - Decisions come back oldest-first. The backend orders by `rowid`, not by
- *    `at` (see backend/app/audit.py::list_for_case), because `at` is only
+ *  - Events arrive oldest-first. The backend orders by `rowid`, not by `at`
+ *    (see backend/app/audit.py::list_for_case), because `at` is only
  *    second-precision -- in a real run all four events can share one
  *    timestamp, so insertion order is the only reliable ordering.
+ *
+ * The UI displays newest-first, so this trail must render reversed:
+ * accept -> reject -> review.
  */
 const REALISTIC_TRAIL: AuditEvent[] = [
   makeEvent({
@@ -152,7 +155,7 @@ describe("DecisionHistory", () => {
     expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
   });
 
-  it("orders the decisions oldest-first, exactly as the audit endpoint returns them", async () => {
+  it("displays the decisions newest-first, reversing the audit endpoint's order", async () => {
     const user = userEvent.setup();
     listCasesMock.mockResolvedValue([makeCase()]);
     getAuditTrailMock.mockResolvedValue(REALISTIC_TRAIL);
@@ -160,14 +163,40 @@ describe("DecisionHistory", () => {
     await openCase(user);
 
     await screen.findByText("Flagged for review");
-    const badges = timelineItems().map((li) => li.textContent ?? "");
-    expect(badges[0]).toMatch(/flagged for review/i);
-    expect(badges[1]).toMatch(/rejected/i);
-    expect(badges[2]).toMatch(/accepted/i);
+    // The endpoint sent review -> reject -> accept; the UI shows the reverse.
+    const rows = timelineItems().map((li) => li.textContent ?? "");
+    expect(rows[0]).toMatch(/accepted/i);
+    expect(rows[1]).toMatch(/rejected/i);
+    expect(rows[2]).toMatch(/flagged for review/i);
 
     // The same ordering, asserted on the machine-readable timestamps.
     const stamps = timelineItems().map((li) => li.querySelector("time")?.getAttribute("datetime"));
-    expect(stamps).toEqual(["2026-08-20T11:00:00Z", "2026-08-21T09:00:00Z", "2026-08-22T14:30:00Z"]);
+    expect(stamps).toEqual(["2026-08-22T14:30:00Z", "2026-08-21T09:00:00Z", "2026-08-20T11:00:00Z"]);
+  });
+
+  it("keeps same-second decisions in their true insertion order, reversed", async () => {
+    const user = userEvent.setup();
+    listCasesMock.mockResolvedValue([makeCase()]);
+    // Every event shares one timestamp -- exactly what the real backend
+    // produces, since `at` is second-precision. Only insertion order (rowid)
+    // distinguishes them, so a timestamp sort would scramble these.
+    const SAME_SECOND = "2026-08-22T14:30:00Z";
+    getAuditTrailMock.mockResolvedValue([
+      makeEvent({ id: "aud_ss00", event_type: "report_created", actor: null, detail: {}, at: SAME_SECOND }),
+      makeEvent({ id: "aud_ss01", actor: "Priya R", detail: { decision: "review", notes: "first" }, at: SAME_SECOND }),
+      makeEvent({ id: "aud_ss02", actor: "Akhilesh", detail: { decision: "reject", notes: "second" }, at: SAME_SECOND }),
+      makeEvent({ id: "aud_ss03", actor: "Agalya", detail: { decision: "accept", notes: "third" }, at: SAME_SECOND }),
+    ]);
+    render(<DecisionHistory />);
+    await openCase(user);
+
+    await screen.findByText("Flagged for review");
+    const rows = timelineItems().map((li) => li.textContent ?? "");
+    expect(rows).toHaveLength(3);
+    // Newest-first despite the timestamps being indistinguishable.
+    expect(rows[0]).toMatch(/third/);
+    expect(rows[1]).toMatch(/second/);
+    expect(rows[2]).toMatch(/first/);
   });
 
   it("takes reviewer, decision, timestamp and notes from the audit event, not the case row", async () => {
@@ -183,17 +212,19 @@ describe("DecisionHistory", () => {
     await openCase(user);
 
     await screen.findByText("Flagged for review");
-    const [first, second, third] = timelineItems();
+    // Newest-first: accept, then reject, then review.
+    const [newest, middle, oldest] = timelineItems();
 
-    expect(within(first).getByText(/by priya r/i)).toBeInTheDocument();
-    expect(within(first).getByText(/needs a second pass/i)).toBeInTheDocument();
-    expect(first.querySelector("time")).toHaveAttribute("datetime", "2026-08-20T11:00:00Z");
+    expect(within(newest).getByText(/by agalya/i)).toBeInTheDocument();
+    expect(within(newest).getByText(/cleared after re-scan/i)).toBeInTheDocument();
+    expect(newest.querySelector("time")).toHaveAttribute("datetime", "2026-08-22T14:30:00Z");
 
-    expect(within(second).getByText(/by akhilesh/i)).toBeInTheDocument();
-    expect(within(second).getByText(/tampering indicators on page 2/i)).toBeInTheDocument();
+    expect(within(middle).getByText(/by akhilesh/i)).toBeInTheDocument();
+    expect(within(middle).getByText(/tampering indicators on page 2/i)).toBeInTheDocument();
 
-    expect(within(third).getByText(/by agalya/i)).toBeInTheDocument();
-    expect(within(third).getByText(/cleared after re-scan/i)).toBeInTheDocument();
+    expect(within(oldest).getByText(/by priya r/i)).toBeInTheDocument();
+    expect(within(oldest).getByText(/needs a second pass/i)).toBeInTheDocument();
+    expect(oldest.querySelector("time")).toHaveAttribute("datetime", "2026-08-20T11:00:00Z");
 
     // Nothing from the cases table leaked into the history.
     expect(screen.queryByText(/row reviewer/i)).not.toBeInTheDocument();
@@ -220,14 +251,17 @@ describe("DecisionHistory", () => {
     // Same decision, same second -- only the audit id separates them. This is
     // the real-backend case that `at`-based ordering or id-less keys would lose.
     getAuditTrailMock.mockResolvedValue([
-      makeEvent({ id: "aud_same01", actor: "Priya R", detail: { decision: "review", notes: null }, at: "2026-08-20T11:00:00Z" }),
-      makeEvent({ id: "aud_same02", actor: "Priya R", detail: { decision: "review", notes: null }, at: "2026-08-20T11:00:00Z" }),
+      makeEvent({ id: "aud_same01", actor: "Priya R", detail: { decision: "review", notes: "earlier pass" }, at: "2026-08-20T11:00:00Z" }),
+      makeEvent({ id: "aud_same02", actor: "Priya R", detail: { decision: "review", notes: "later pass" }, at: "2026-08-20T11:00:00Z" }),
     ]);
     render(<DecisionHistory />);
     await openCase(user);
 
     expect(await screen.findByText("2 decisions recorded")).toBeInTheDocument();
-    expect(timelineItems()).toHaveLength(2);
+    const rows = timelineItems();
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toMatch(/later pass/);
+    expect(rows[1].textContent).toMatch(/earlier pass/);
   });
 
   it("excludes report_created events from the decision list and count", async () => {
