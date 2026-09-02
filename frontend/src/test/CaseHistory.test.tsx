@@ -32,7 +32,7 @@ describe("CaseHistory", () => {
 
   it("shows a loading state, then the fetched cases", async () => {
     listCasesMock.mockResolvedValue([makeCase()]);
-    render(<CaseHistory onOpenCase={vi.fn()} />);
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={vi.fn()} />);
 
     expect(screen.getByText(/loading past verifications/i)).toBeInTheDocument();
 
@@ -47,7 +47,7 @@ describe("CaseHistory", () => {
     listCasesMock.mockResolvedValue([
       makeCase({ reviewer_decision: "accept", reviewer_name: "Priya R" }),
     ]);
-    render(<CaseHistory onOpenCase={vi.fn()} />);
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={vi.fn()} />);
 
     expect(await screen.findByText("Accepted")).toBeInTheDocument();
     expect(within(screen.getByRole("table")).queryByText("Pending")).not.toBeInTheDocument();
@@ -55,14 +55,14 @@ describe("CaseHistory", () => {
 
   it("shows an empty state when there are no cases at all", async () => {
     listCasesMock.mockResolvedValue([]);
-    render(<CaseHistory onOpenCase={vi.fn()} />);
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={vi.fn()} />);
 
     expect(await screen.findByText(/no cases yet/i)).toBeInTheDocument();
   });
 
   it("shows an honest error state, never a fabricated list, when the fetch fails", async () => {
     listCasesMock.mockRejectedValue(new Error("List cases failed: backend responded 500"));
-    render(<CaseHistory onOpenCase={vi.fn()} />);
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={vi.fn()} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/backend responded 500/i);
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("CaseHistory", () => {
       makeCase({ report_id: "rep_alpha001" }),
       makeCase({ report_id: "rep_beta002", bundle_id: "bnd_x2" }),
     ]);
-    render(<CaseHistory onOpenCase={vi.fn()} />);
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={vi.fn()} />);
 
     await screen.findByText("rep_alpha001");
     expect(screen.getByText("rep_beta002")).toBeInTheDocument();
@@ -91,7 +91,7 @@ describe("CaseHistory", () => {
       makeCase({ report_id: "rep_low", risk_severity: "low" }),
       makeCase({ report_id: "rep_high", risk_severity: "high" }),
     ]);
-    render(<CaseHistory onOpenCase={vi.fn()} />);
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={vi.fn()} />);
 
     await screen.findByText("rep_low");
     await user.selectOptions(screen.getByLabelText(/filter by risk severity/i), "high");
@@ -106,7 +106,7 @@ describe("CaseHistory", () => {
       makeCase({ report_id: "rep_pending", reviewer_decision: null }),
       makeCase({ report_id: "rep_rejected", reviewer_decision: "reject" }),
     ]);
-    render(<CaseHistory onOpenCase={vi.fn()} />);
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={vi.fn()} />);
 
     await screen.findByText("rep_pending");
     expect(screen.getByText("rep_rejected")).toBeInTheDocument();
@@ -120,7 +120,7 @@ describe("CaseHistory", () => {
   it("shows a no-matches message when filters exclude every case", async () => {
     const user = userEvent.setup();
     listCasesMock.mockResolvedValue([makeCase({ risk_severity: "low" })]);
-    render(<CaseHistory onOpenCase={vi.fn()} />);
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={vi.fn()} />);
 
     await screen.findByText("rep_alpha001");
     await user.selectOptions(screen.getByLabelText(/filter by risk severity/i), "critical");
@@ -132,7 +132,7 @@ describe("CaseHistory", () => {
     const user = userEvent.setup();
     const onOpenCase = vi.fn();
     listCasesMock.mockResolvedValue([makeCase({ report_id: "rep_click_me" })]);
-    render(<CaseHistory onOpenCase={onOpenCase} />);
+    render(<CaseHistory onOpenCase={onOpenCase} onBack={vi.fn()} />);
 
     const button = await screen.findByRole("button", { name: "rep_click_me" });
     await user.click(button);
@@ -144,7 +144,7 @@ describe("CaseHistory", () => {
     const user = userEvent.setup();
     const onOpenCase = vi.fn();
     listCasesMock.mockResolvedValue([makeCase({ report_id: "rep_keyboard" })]);
-    render(<CaseHistory onOpenCase={onOpenCase} />);
+    render(<CaseHistory onOpenCase={onOpenCase} onBack={vi.fn()} />);
 
     const button = await screen.findByRole("button", { name: "rep_keyboard" });
     button.focus();
@@ -157,12 +157,46 @@ describe("CaseHistory", () => {
     const user = userEvent.setup();
     const onOpenCase = vi.fn();
     listCasesMock.mockResolvedValue([makeCase({ report_id: "rep_row_click" })]);
-    render(<CaseHistory onOpenCase={onOpenCase} />);
+    render(<CaseHistory onOpenCase={onOpenCase} onBack={vi.fn()} />);
 
     await screen.findByText("rep_row_click");
     const cell = screen.getByText(/3/, { selector: "td" }); // document_count cell, not the button
     await user.click(cell);
 
     expect(onOpenCase).toHaveBeenCalledWith("rep_row_click");
+  });
+
+  it("offers an accessible Back control that returns to the previous screen", async () => {
+    listCasesMock.mockResolvedValue([makeCase()]);
+    const onBack = vi.fn();
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={onBack} />);
+
+    const back = await screen.findByRole("button", { name: /^back$/i });
+    expect(back).toBeInTheDocument();
+
+    await userEvent.click(back);
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("reaches Back by keyboard and activates it with Enter", async () => {
+    listCasesMock.mockResolvedValue([makeCase()]);
+    const onBack = vi.fn();
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={onBack} />);
+
+    const back = await screen.findByRole("button", { name: /^back$/i });
+    back.focus();
+    expect(back).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("still shows Back when the case list fails to load", async () => {
+    listCasesMock.mockRejectedValue(new Error("List cases failed: backend responded 500"));
+    const onBack = vi.fn();
+    render(<CaseHistory onOpenCase={vi.fn()} onBack={onBack} />);
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^back$/i })).toBeInTheDocument();
   });
 });

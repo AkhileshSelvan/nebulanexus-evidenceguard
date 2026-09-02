@@ -10,8 +10,13 @@ import { DecisionHistory } from "./components/DecisionHistory";
 type AppState =
   | { screen: "upload" }
   | { screen: "processing"; fileCount: number }
-  | { screen: "report"; report: VerificationReport }
-  | { screen: "history" }
+  // `origin` records how the reader arrived, so the report can offer the
+  // matching way back. It never affects what the report shows.
+  | { screen: "report"; report: VerificationReport; origin: "verification" | "history" }
+  // `returnTo` is the screen History was opened from, restored verbatim by
+  // its Back control. Only settled screens are captured (never a transient
+  // processing/loading/error state, and never History itself).
+  | { screen: "history"; returnTo: AppState }
   | { screen: "decision-history" }
   // Fetching an already-completed case from history -- distinct from
   // "processing", which implies the analysis pipeline is running. Reusing
@@ -87,7 +92,7 @@ export default function App() {
     setAppState({ screen: "processing", fileCount: files.length });
     try {
       const report = await verifyBundle(files);
-      setAppState({ screen: "report", report });
+      setAppState({ screen: "report", report, origin: "verification" });
     } catch (err) {
       setAppState({
         screen: "error",
@@ -101,11 +106,31 @@ export default function App() {
 
   const handleReset = () => setAppState({ screen: "upload" });
 
+  /** Open Case History, remembering the screen to come back to. */
+  const openHistory = () =>
+    setAppState((prev) => {
+      if (prev.screen === "history") return prev; // already there; keep returnTo
+      const returnTo: AppState =
+        prev.screen === "upload" || prev.screen === "report" ? prev : { screen: "upload" };
+      return { screen: "history", returnTo };
+    });
+
+  /** Case History "Back" -- restore whatever screen it was opened from. */
+  const handleBackFromHistory = () =>
+    setAppState((prev) => (prev.screen === "history" ? prev.returnTo : { screen: "upload" }));
+
+  /**
+   * Report "Back to case history". The list is re-fetched on mount, so a
+   * decision recorded on the case is reflected when the reviewer returns.
+   */
+  const handleBackToHistory = () =>
+    setAppState({ screen: "history", returnTo: { screen: "upload" } });
+
   const handleOpenCase = async (reportId: string) => {
     setAppState({ screen: "loading-case" });
     try {
       const detail = await getCase(reportId);
-      setAppState({ screen: "report", report: detail.report });
+      setAppState({ screen: "report", report: detail.report, origin: "history" });
     } catch (err) {
       setAppState({
         screen: "error",
@@ -152,7 +177,7 @@ export default function App() {
           <div className="flex flex-shrink-0 items-center gap-3">
             <button
               type="button"
-              onClick={() => setAppState({ screen: "history" })}
+              onClick={openHistory}
               className="eg-press inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:border-guard-300 hover:text-guard-700"
               aria-current={appState.screen === "history" ? "page" : undefined}
             >
@@ -189,10 +214,18 @@ export default function App() {
         {appState.screen === "processing" && <ProcessingScreen fileCount={appState.fileCount} />}
 
         {appState.screen === "report" && (
-          <ReportView report={appState.report} onReset={handleReset} />
+          <ReportView
+            report={appState.report}
+            onReset={handleReset}
+            onBackToHistory={
+              appState.origin === "history" ? handleBackToHistory : undefined
+            }
+          />
         )}
 
-        {appState.screen === "history" && <CaseHistory onOpenCase={handleOpenCase} />}
+        {appState.screen === "history" && (
+          <CaseHistory onOpenCase={handleOpenCase} onBack={handleBackFromHistory} />
+        )}
 
         {appState.screen === "decision-history" && <DecisionHistory onBack={handleReset} />}
 

@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Line Typer</h1>
+    <span id="meta" class="meta"></span>
+  </header>
+
+  <textarea id="text" spellcheck="false" placeholder="Paste the text here..."></textarea>
+
+  <div class="presets">
+    <span class="presets-label">Preset</span>
+    <button id="presetWhatsapp" type="button">WhatsApp</button>
+    <button id="presetEditor" type="button">Code editor</button>
+  </div>
+
+  <label class="field wide">
+    <span>New line</span>
+    <select id="newline">
+      <option value="shift">Shift+Enter &mdash; one WhatsApp message</option>
+      <option value="key">Enter &mdash; sends each line separately</option>
+      <option value="insert">Insert &#92;n &mdash; code editors, textareas</option>
+    </select>
+  </label>
+
+  <div class="grid">
+    <label class="field">
+      <span>Style</span>
+      <select id="mode">
+        <option value="human">Human typing</option>
+        <option value="line">Line by line</option>
+        <option value="instant">All at once</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Speed</span>
+      <select id="speed">
+        <option value="90">Slow</option>
+        <option value="45">Natural</option>
+        <option value="18">Fast</option>
+        <option value="6">Very fast</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Line pause (ms)</span>
+      <input id="lineDelay" type="number" min="0" max="5000" step="10">
+    </label>
+    <label class="field">
+      <span>Randomness (%)</span>
+      <input id="jitter" type="number" min="0" max="100" step="5">
+    </label>
+  </div>
+
+  <label class="check">
+    <input id="stripIndent" type="checkbox">
+    <span>Strip indentation <em>(editor auto-indents for you)</em></span>
+  </label>
+  <label class="check">
+    <input id="typo" type="checkbox">
+    <span>Occasional typo + backspace</span>
+  </label>
+
+  <div class="actions">
+    <button id="start" class="primary">Type now</button>
+    <button id="stop">Stop</button>
+  </div>
+  <p id="status" class="status">Click the message box, then Ctrl+Shift+Y.</p>
+
+  <script src="defaults.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
