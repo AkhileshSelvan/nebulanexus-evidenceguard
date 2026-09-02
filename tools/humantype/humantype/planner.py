@@ -18,7 +18,7 @@ KeyName = Literal["enter", "backspace", "shift+home"]
 #: Characters that require Shift or a stretch to the number row. Typing these
 #: measurably slows people down, which is most of what makes replayed code
 #: read as typed rather than injected.
-AWKWARD = set("~!@#$%^&*()_+{}|:\"<>?" + "1234567890-=[]\;',./`")
+AWKWARD = set("~!@#$%^&*()_+{}|:\"<>?" + r"1234567890-=[]\;',./`")
 
 #: QWERTY neighbours, used only to make a simulated typo land on a key that a
 #: hand could plausibly have hit instead.

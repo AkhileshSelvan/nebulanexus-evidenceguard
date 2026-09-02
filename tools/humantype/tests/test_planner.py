@@ -1,5 +1,7 @@
+import pathlib
 import statistics
 import unittest
+import warnings
 from dataclasses import replace
 
 from humantype.planner import Keystroke, duration, plan, transcript
@@ -194,6 +196,40 @@ class ProfileTests(unittest.TestCase):
     def test_zero_wpm_is_rejected(self):
         with self.assertRaises(ValueError):
             TypingProfile(wpm=0).base_delay()
+
+
+class SourceHygieneTests(unittest.TestCase):
+    """Warnings that are not errors still rot: catch them in CI, not on a laptop."""
+
+    def test_no_module_emits_a_syntax_warning(self):
+        # Regression: an unescaped "\;" inside a plain string literal is an
+        # invalid escape sequence. It behaves correctly today and warns on
+        # every import, and a future Python turns it into an error.
+        import humantype
+
+        package = pathlib.Path(humantype.__file__).parent
+        sources = sorted(package.glob("*.py"))
+        self.assertTrue(sources, "expected to find the package sources")
+
+        for path in sources:
+            with self.subTest(module=path.name):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", SyntaxWarning)
+                    compile(path.read_text(encoding="utf-8"), str(path), "exec")
+
+    def test_awkward_set_contains_the_characters_it_claims(self):
+        # The raw-string fix must not quietly change the set's contents.
+        from humantype.planner import AWKWARD
+
+        for ch in "\\;'[]`~!@#$%^&*()_+{}|:\"<>?1234567890-=,./":
+            with self.subTest(char=ch):
+                self.assertIn(ch, AWKWARD)
+
+    def test_awkward_set_excludes_ordinary_letters_and_space(self):
+        from humantype.planner import AWKWARD
+
+        for ch in "abcXYZ ":
+            self.assertNotIn(ch, AWKWARD)
 
 
 if __name__ == "__main__":

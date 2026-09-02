@@ -40,8 +40,13 @@ To actually press keys you need a backend:
 
 ```bash
 cd tools/humantype
-pip install -e ".[keyboard]"     # pynput (keys) + pyperclip (clipboard)
+python3 -m pip install -e ".[keyboard]"
 ```
+
+That pulls in pynput (keys) and pyperclip (clipboard). Use `python3 -m pip`
+rather than a bare `pip`: on macOS and many Linux setups `pip` is not on PATH
+even though Python is, and `python3 -m pip` always targets the interpreter
+that will actually run the tool.
 
 Linux without pynput: `sudo apt install xdotool` works as a fallback, and
 `xclip`/`wl-paste` cover the clipboard.
@@ -163,7 +168,9 @@ resulting text, so a test can assert that a plan reproduces its input exactly.
 ./run_tests.sh
 ```
 
-86 tests, standard library only — no pytest, no display, no network.
+89 tests, standard library only — no pytest, no display, no network.
+`SyntaxWarning` is promoted to an error, so an invalid escape sequence
+fails the suite instead of merely warning on every import.
 
 ## Known limits
 
