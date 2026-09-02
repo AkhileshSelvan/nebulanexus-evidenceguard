@@ -74,6 +74,16 @@ The countdown is the whole interface: start it, then click into the target
 field. Whatever has focus when it ends gets typed into. `Ctrl+C` aborts
 mid-type (the field keeps the partial text).
 
+> **Never let the countdown end on a shell prompt.**
+> Every newline is sent as Enter, so a terminal submits each line as a
+> command. Typing a document into a shell is mostly `command not found`
+> noise, but a line that happens to be a valid command will run. This is the
+> easy mistake to make, because the terminal you launched from is exactly
+> what still has focus if you forget to click away. Click into the target
+> first, or use `--hotkey` so focus is never in doubt.
+
+If you are not sure where it will land, `--dry-run` presses no keys at all.
+
 To skip the countdown entirely, run it as a daemon and trigger it from
 wherever your cursor already is:
 
